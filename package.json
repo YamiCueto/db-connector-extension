@@ -1,0 +1,273 @@
+{
+  "name": "db-connector-extension",
+  "displayName": "DB Connector Extension",
+  "description": "Multi-database connection manager and query tool for MySQL, PostgreSQL, SQL Server, MongoDB, and MariaDB",
+  "version": "0.0.1",
+  "publisher": "YamidCuetoMazo",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Data Science"
+  ],
+  "keywords": [
+    "database",
+    "mysql",
+    "postgresql",
+    "mongodb",
+    "sql server",
+    "mariadb",
+    "query",
+    "sql"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:dbConnector"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "dbConnector.addConnection",
+        "title": "Add Database Connection",
+        "category": "DB Connector",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dbConnector.removeConnection",
+        "title": "Remove Connection",
+        "category": "DB Connector",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "dbConnector.refreshConnection",
+        "title": "Refresh Connection",
+        "category": "DB Connector",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dbConnector.executeQuery",
+        "title": "Execute Query",
+        "category": "DB Connector",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dbConnector.newQuery",
+        "title": "New Query",
+        "category": "DB Connector",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "dbConnector.connectToDatabase",
+        "title": "Connect",
+        "category": "DB Connector",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "dbConnector.disconnectFromDatabase",
+        "title": "Disconnect",
+        "category": "DB Connector",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "dbConnector.editConnection",
+        "title": "Edit Connection",
+        "category": "DB Connector",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "dbConnector.exportResults",
+        "title": "Export Results",
+        "category": "DB Connector",
+        "icon": "$(export)"
+      },
+      {
+        "command": "dbConnector.showQueryHistory",
+        "title": "Show Query History",
+        "category": "DB Connector",
+        "icon": "$(history)"
+      },
+      {
+        "command": "dbConnector.selectTop",
+        "title": "Select Top 100",
+        "category": "DB Connector",
+        "icon": "$(play)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dbConnectorView",
+          "title": "DB Connector",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "dbConnectorView": [
+        {
+          "id": "dbConnector",
+          "name": "Database Connections",
+          "icon": "$(database)",
+          "contextualTitle": "DB Connector"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dbConnector",
+        "contents": "No database connections found.\n[Add Connection](command:dbConnector.addConnection)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dbConnector.addConnection",
+          "when": "view == dbConnector",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dbConnector.refreshConnection",
+          "when": "view == dbConnector",
+          "group": "navigation@2"
+        },
+        {
+          "command": "dbConnector.showQueryHistory",
+          "when": "view == dbConnector",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dbConnector.connectToDatabase",
+          "when": "view == dbConnector && viewItem == connection-disconnected",
+          "group": "inline@1"
+        },
+        {
+          "command": "dbConnector.disconnectFromDatabase",
+          "when": "view == dbConnector && viewItem == connection-connected",
+          "group": "inline@1"
+        },
+        {
+          "command": "dbConnector.newQuery",
+          "when": "view == dbConnector && viewItem =~ /^(connection-connected|database|table|collection)$/",
+          "group": "1_query@1"
+        },
+        {
+          "command": "dbConnector.selectTop",
+          "when": "view == dbConnector && viewItem =~ /^(table|collection)$/",
+          "group": "1_query@2"
+        },
+        {
+          "command": "dbConnector.refreshConnection",
+          "when": "view == dbConnector && viewItem =~ /^(connection-|database|table|collection)$/",
+          "group": "2_actions@1"
+        },
+        {
+          "command": "dbConnector.editConnection",
+          "when": "view == dbConnector && viewItem =~ /^connection-/",
+          "group": "2_actions@2"
+        },
+        {
+          "command": "dbConnector.removeConnection",
+          "when": "view == dbConnector && viewItem =~ /^connection-/",
+          "group": "3_delete@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "dbConnector.executeQuery",
+          "when": "editorLangId == sql || editorLangId == javascript || resourceExtname == .sql || resourceExtname == .mongodb",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DB Connector",
+      "properties": {
+        "dbConnector.connectionTimeout": {
+          "type": "number",
+          "default": 30000,
+          "description": "Connection timeout in milliseconds",
+          "minimum": 1000,
+          "maximum": 300000
+        },
+        "dbConnector.queryTimeout": {
+          "type": "number",
+          "default": 60000,
+          "description": "Query execution timeout in milliseconds",
+          "minimum": 1000,
+          "maximum": 600000
+        },
+        "dbConnector.maxQueryHistorySize": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum number of queries to keep in history",
+          "minimum": 10,
+          "maximum": 1000
+        },
+        "dbConnector.autoExpandTreeItems": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically expand tree items when connecting to a database"
+        },
+        "dbConnector.showRowCount": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show row count in query results"
+        },
+        "dbConnector.resultPageSize": {
+          "type": "number",
+          "default": 1000,
+          "description": "Number of rows to display per page in results",
+          "minimum": 10,
+          "maximum": 10000
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "test": "node ./out/test/runTest.js",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/mssql": "^9.1.8",
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.16.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "prettier": "^3.2.4",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "@types/ssh2": "^1.15.0",
+    "mongodb": "^6.3.0",
+    "mssql": "^10.0.2",
+    "mysql2": "^3.9.0",
+    "pg": "^8.11.3",
+    "ssh2": "^1.15.0"
+  }
+}
