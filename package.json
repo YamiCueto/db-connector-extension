@@ -2,9 +2,18 @@
   "name": "db-connector-extension",
   "displayName": "DB Connector Extension",
   "description": "Multi-database connection manager and query tool for MySQL, PostgreSQL, SQL Server, MongoDB, and MariaDB",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publisher": "YamidCuetoMazo",
   "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YamiCueto/db-connector-extension"
+  },
+  "homepage": "https://github.com/YamiCueto/db-connector-extension#readme",
+  "bugs": {
+    "url": "https://github.com/YamiCueto/db-connector-extension/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
