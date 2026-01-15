@@ -2,16 +2,59 @@
 
 A powerful VS Code extension for managing and querying multiple database connections. Supports MySQL, PostgreSQL, SQL Server (MSSQL), MongoDB, and MariaDB.
 
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![VS Code](https://img.shields.io/badge/VS%20Code-1.85%2B-brightgreen.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
 ## Features
 
+### Core Features
 - **Multi-Database Support**: Connect to MySQL, PostgreSQL, SQL Server, MongoDB, and MariaDB
 - **Secure Credential Storage**: Passwords stored securely using VS Code's Secret Storage API
 - **Database Explorer**: Tree view showing connections, databases, tables/collections, and columns/fields
 - **Query Editor**: Execute SQL and MongoDB queries with syntax highlighting
-- **Results Viewer**: View query results in a rich webview panel
+- **Results Viewer**: View query results in a rich webview panel with tabbed interface
 - **Query History**: Track and replay previous queries
 - **Export Results**: Export query results to CSV or JSON
 - **Multiple Connections**: Work with multiple database connections simultaneously
+
+### New in v1.1.0 🎉
+
+#### SQL IntelliSense
+- **Keywords & Functions**: Auto-complete for SQL keywords and functions
+- **Schema Suggestions**: Table and column names from connected databases
+- **14 Code Snippets**: `sel`, `selw`, `ins`, `upd`, `del`, `cte`, `case`, `join`, `ljoin`, `grp`, `sub`, `exist`, `ctab`, `idx`
+- **Smart Caching**: Schema cached for 5 minutes for fast suggestions
+
+#### CodeLens (Run Query Buttons)
+- **▶ Run Query**: Click button above any SQL statement to execute
+- **▶▶ Run All**: Execute all queries in the file at once
+- **Visual Feedback**: Query highlighting during execution
+
+#### Multi-Query Execution
+- Execute multiple queries separated by semicolons
+- Tabbed results panel showing each query result
+- Individual export/copy buttons per result tab
+- Progress indicator with cancellation support
+
+#### Import/Export Connections
+- Export connections to JSON (with optional passwords)
+- Import connections from JSON file
+- Duplicate handling: rename, skip, or replace
+- Share connection configs across teams
+
+#### Query Templates
+- 10 SQL templates: SELECT, INSERT, UPDATE, DELETE, COUNT, DISTINCT, JOIN, CREATE, ALTER, DROP
+- Right-click on tables to generate queries
+- Auto-fill with actual table columns
+
+#### Auto-detect Connection
+- Add header comments to auto-select connection:
+  ```sql
+  -- Connection: MyDatabase
+  -- Database: production
+  SELECT * FROM users;
+  ```
 
 ## Installation
 
@@ -57,8 +100,35 @@ A powerful VS Code extension for managing and querying multiple database connect
 
 1. Right-click a connection and select "New Query"
 2. Write your SQL query
-3. Click the play icon in the editor toolbar or run "DB Connector: Execute Query"
-4. Results will appear in a new panel
+3. Execute using any of these methods:
+   - Press `F5` or `Ctrl+Enter`
+   - Click the **▶ Run Query** button above the query (CodeLens)
+   - Right-click and select "DB Connector: Execute Query"
+   - Click the play icon in the editor toolbar
+4. Results will appear in a tabbed panel
+
+#### Multi-Query Execution
+
+Execute multiple queries at once by separating them with semicolons:
+
+```sql
+SELECT * FROM users;
+SELECT * FROM orders;
+SELECT COUNT(*) FROM products;
+```
+
+Each query result will appear in its own tab.
+
+#### Auto-detect Connection
+
+Add comments at the top of your file to auto-select a connection:
+
+```sql
+-- Connection: ProductionDB
+-- Database: ecommerce
+
+SELECT * FROM customers WHERE active = 1;
+```
 
 #### MongoDB
 
@@ -104,21 +174,39 @@ Configure the extension through VS Code settings:
 
 ## Commands
 
+### Connection Management
 - `DB Connector: Add Database Connection` - Add a new database connection
+- `DB Connector: Edit Connection` - Edit connection settings (SSL, password, etc.)
 - `DB Connector: Remove Connection` - Remove a database connection
-- `DB Connector: Edit Connection` - Edit connection settings
 - `DB Connector: Connect` - Connect to a database
 - `DB Connector: Disconnect` - Disconnect from a database
 - `DB Connector: Refresh Connection` - Refresh the tree view
+
+### Import/Export
+- `DB Connector: Export Connections` - Export connections to JSON file
+- `DB Connector: Import Connections` - Import connections from JSON file
+
+### Query Execution
 - `DB Connector: Execute Query` - Execute the current query
 - `DB Connector: New Query` - Create a new query file
 - `DB Connector: Show Query History` - View query history
 - `DB Connector: Export Results` - Export query results
 
+### Query Templates
+- `DB Connector: Query Templates` - Open template picker
+- `DB Connector: Generate SELECT` - Generate SELECT for table
+- `DB Connector: Generate INSERT` - Generate INSERT template
+- `DB Connector: Generate UPDATE` - Generate UPDATE template
+- `DB Connector: Generate DELETE` - Generate DELETE template
+
 ## Keyboard Shortcuts
 
-- `Ctrl+Shift+E` (or `Cmd+Shift+E` on Mac) - Execute query
-- `F5` - Execute query (when in SQL/MongoDB file)
+| Shortcut | Command |
+|----------|--------|
+| `F5` | Execute query |
+| `Ctrl+Enter` | Execute query |
+| `Cmd+Enter` (Mac) | Execute query |
+| `Ctrl+Shift+E` | Execute query (legacy) |
 
 ## Security
 
@@ -203,7 +291,9 @@ db-connector-extension/
 │   │   └── treeItems.ts
 │   ├── queryEditor/              # Query execution
 │   │   ├── queryExecutor.ts
-│   │   └── resultsPanel.ts
+│   │   ├── resultsPanel.ts
+│   │   ├── sqlCompletionProvider.ts  # SQL IntelliSense
+│   │   └── sqlCodeLensProvider.ts    # Run Query buttons
 │   └── utils/                    # Utilities
 │       ├── encryption.ts
 │       └── logger.ts
@@ -259,14 +349,23 @@ For issues, questions, or feature requests:
 
 ## Roadmap
 
+### Completed ✅
+- [x] Query autocomplete (SQL IntelliSense)
+- [x] Import/export connections
+- [x] Multi-query execution
+- [x] Edit connection settings
+- [x] Query templates
+- [x] CodeLens run buttons
+- [x] Auto-detect connection from file
+
+### Coming Soon 🚀
 - [ ] SSH tunnel support
-- [ ] Connection grouping
-- [ ] Query autocomplete
+- [ ] Connection grouping/folders
+- [ ] Favorite queries
 - [ ] Schema diff tool
 - [ ] Data editing in results
-- [ ] Import/export connections
-- [ ] Multi-query execution
 - [ ] Query performance analytics
+- [ ] MongoDB IntelliSense
 
 ## Acknowledgments
 
