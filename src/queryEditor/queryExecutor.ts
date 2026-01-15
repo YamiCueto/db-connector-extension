@@ -330,8 +330,8 @@ export class QueryExecutor {
                     // Add to history
                     this.addToHistory(connectionId, queries[0], result);
 
-                    // Show results
-                    ResultsPanel.show(this.context, result, queries[0]);
+                    // Show results with connection info for editing
+                    ResultsPanel.show(this.context, result, queries[0], connectionId, database);
 
                     if (result.error) {
                         vscode.window.showErrorMessage(`Query failed: ${result.error}`);

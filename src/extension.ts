@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { DatabaseTreeProvider } from './treeView/databaseTreeProvider';
 import { QueryExecutor } from './queryEditor/queryExecutor';
+import { ResultsPanel } from './queryEditor/resultsPanel';
 import { SqlCompletionProvider } from './queryEditor/sqlCompletionProvider';
 import { SqlCodeLensProvider } from './queryEditor/sqlCodeLensProvider';
 import { Logger } from './utils/logger';
@@ -19,6 +20,9 @@ export function activate(context: vscode.ExtensionContext) {
     const connectionManager = ConnectionManager.getInstance(context);
     const treeProvider = new DatabaseTreeProvider(connectionManager);
     const queryExecutor = new QueryExecutor(connectionManager, context);
+
+    // Set connection manager for ResultsPanel (needed for data editing)
+    ResultsPanel.setConnectionManager(connectionManager);
 
     // Register SQL completion provider
     const sqlCompletionProvider = new SqlCompletionProvider(connectionManager);

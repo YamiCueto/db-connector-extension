@@ -2,6 +2,32 @@
 
 All notable changes to the "DB Connector Extension" will be documented in this file.
 
+## [1.2.0] - 2026-01-15
+
+### Added
+
+#### Data Editing in Results
+- **Edit Mode**: Click "✏️ Edit Data" button to enable editing on SELECT query results
+- **Inline Editing**: Double-click any cell to edit its value
+- **Add Rows**: Add new rows with "➕ Add Row" button
+- **Delete Rows**: Remove rows with "🗑️" button per row
+- **Save Changes**: Generates and executes UPDATE/INSERT/DELETE statements
+- **Discard Changes**: Revert all modifications
+- **Primary Key Detection**: Automatically detects PKs to build WHERE clauses
+- **Visual Indicators**:
+  - 🔑 Primary key columns highlighted (non-editable)
+  - 🟡 Modified cells marked
+  - 🟢 New rows with green background
+  - 🔴 Deleted rows shown with strikethrough
+- **Change Counter**: Shows pending updates, inserts, and deletes
+- **Multi-database Support**: SQL generation adapts to MySQL, PostgreSQL, MSSQL, MariaDB
+
+### Limitations
+- Only simple SELECT queries are editable (no JOINs, UNIONs, subqueries, GROUP BY)
+- Table must have a primary key
+
+---
+
 ## [1.1.0] - 2026-01-15
 
 ### Added

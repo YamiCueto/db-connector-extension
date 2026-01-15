@@ -2,7 +2,7 @@
 
 A powerful VS Code extension for managing and querying multiple database connections. Supports MySQL, PostgreSQL, SQL Server (MSSQL), MongoDB, and MariaDB.
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![VS Code](https://img.shields.io/badge/VS%20Code-1.85%2B-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -18,7 +18,17 @@ A powerful VS Code extension for managing and querying multiple database connect
 - **Export Results**: Export query results to CSV or JSON
 - **Multiple Connections**: Work with multiple database connections simultaneously
 
-### New in v1.1.0 🎉
+### New in v1.2.0 🎉
+
+#### Data Editing in Results
+- **Edit Mode**: Click "✏️ Edit Data" on any SELECT query result
+- **Inline Editing**: Double-click cells to modify values
+- **Add/Delete Rows**: Insert new rows or remove existing ones
+- **Save to Database**: Generates UPDATE/INSERT/DELETE statements automatically
+- **Visual Feedback**: Modified cells highlighted, deleted rows strikethrough
+- **Primary Key Detection**: Identifies PKs for safe updates
+
+### Previous Features (v1.1.0)
 
 #### SQL IntelliSense
 - **Keywords & Functions**: Auto-complete for SQL keywords and functions
@@ -357,13 +367,13 @@ For issues, questions, or feature requests:
 - [x] Query templates
 - [x] CodeLens run buttons
 - [x] Auto-detect connection from file
+- [x] Data editing in results
 
 ### Coming Soon 🚀
 - [ ] SSH tunnel support
 - [ ] Connection grouping/folders
 - [ ] Favorite queries
 - [ ] Schema diff tool
-- [ ] Data editing in results
 - [ ] Query performance analytics
 - [ ] MongoDB IntelliSense
 
