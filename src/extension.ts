@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { DatabaseTreeProvider } from './treeView/databaseTreeProvider';
 import { QueryExecutor } from './queryEditor/queryExecutor';
+import { SqlCompletionProvider } from './queryEditor/sqlCompletionProvider';
+import { SqlCodeLensProvider } from './queryEditor/sqlCodeLensProvider';
 import { Logger } from './utils/logger';
 import { ConnectionConfig, DatabaseType } from './types';
 import { TableTreeItem, CollectionTreeItem, DatabaseTreeItem, ConnectionTreeItem } from './treeView/treeItems';
@@ -17,6 +19,40 @@ export function activate(context: vscode.ExtensionContext) {
     const connectionManager = ConnectionManager.getInstance(context);
     const treeProvider = new DatabaseTreeProvider(connectionManager);
     const queryExecutor = new QueryExecutor(connectionManager, context);
+
+    // Register SQL completion provider
+    const sqlCompletionProvider = new SqlCompletionProvider(connectionManager);
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider(
+            { language: 'sql' },
+            sqlCompletionProvider,
+            '.', ' ' // Trigger on dot and space
+        )
+    );
+    // Also register for plain text files that might be SQL
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider(
+            { scheme: 'untitled' },
+            sqlCompletionProvider,
+            '.', ' '
+        )
+    );
+
+    // Register SQL CodeLens provider (Run Query buttons)
+    const sqlCodeLensProvider = new SqlCodeLensProvider();
+    context.subscriptions.push(
+        vscode.languages.registerCodeLensProvider(
+            { language: 'sql' },
+            sqlCodeLensProvider
+        )
+    );
+    // Also for untitled SQL files
+    context.subscriptions.push(
+        vscode.languages.registerCodeLensProvider(
+            { scheme: 'untitled', language: 'sql' },
+            sqlCodeLensProvider
+        )
+    );
 
     // Register tree view
     const treeView = vscode.window.createTreeView('dbConnector', {
@@ -73,7 +109,7 @@ function registerCommands(
     // Edit connection command
     context.subscriptions.push(
         vscode.commands.registerCommand('dbConnector.editConnection', async (item) => {
-            await editConnection(connectionManager, item);
+            await editConnection(connectionManager, item, treeProvider);
         })
     );
 
@@ -105,6 +141,13 @@ function registerCommands(
         })
     );
 
+    // Execute query at cursor (from CodeLens)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.executeQueryAtCursor', async (range: vscode.Range) => {
+            await queryExecutor.executeQueryAtRange(range);
+        })
+    );
+
     // New query command
     context.subscriptions.push(
         vscode.commands.registerCommand('dbConnector.newQuery', async (item) => {
@@ -130,6 +173,55 @@ function registerCommands(
     context.subscriptions.push(
         vscode.commands.registerCommand('dbConnector.exportResults', async () => {
             vscode.window.showInformationMessage('Export results from the results panel');
+        })
+    );
+
+    // Export connections command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.exportConnections', async () => {
+            await exportConnections(connectionManager);
+        })
+    );
+
+    // Import connections command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.importConnections', async () => {
+            await importConnections(connectionManager, treeProvider);
+        })
+    );
+
+    // Query Templates command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.queryTemplates', async () => {
+            await showQueryTemplates(connectionManager);
+        })
+    );
+
+    // Generate SELECT command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.generateSelect', async (item) => {
+            await generateQueryTemplate(connectionManager, item, 'select');
+        })
+    );
+
+    // Generate INSERT command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.generateInsert', async (item) => {
+            await generateQueryTemplate(connectionManager, item, 'insert');
+        })
+    );
+
+    // Generate UPDATE command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.generateUpdate', async (item) => {
+            await generateQueryTemplate(connectionManager, item, 'update');
+        })
+    );
+
+    // Generate DELETE command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dbConnector.generateDelete', async (item) => {
+            await generateQueryTemplate(connectionManager, item, 'delete');
         })
     );
 }
@@ -263,8 +355,176 @@ async function removeConnection(connectionManager: ConnectionManager, item: any)
 /**
  * Edit a database connection
  */
-async function editConnection(_connectionManager: ConnectionManager, _item: any): Promise<void> {
-    vscode.window.showInformationMessage('Edit connection feature coming soon!');
+async function editConnection(
+    connectionManager: ConnectionManager,
+    item: any,
+    treeProvider: DatabaseTreeProvider
+): Promise<void> {
+    try {
+        const connectionId = item?.connection?.id;
+        if (!connectionId) {
+            vscode.window.showErrorMessage('No connection selected');
+            return;
+        }
+
+        const existingConfig = connectionManager.getConnection(connectionId);
+        if (!existingConfig) {
+            vscode.window.showErrorMessage('Connection not found');
+            return;
+        }
+
+        // Check if connected - warn user
+        const isConnected = connectionManager.getProvider(connectionId) !== undefined;
+        if (isConnected) {
+            const proceed = await vscode.window.showWarningMessage(
+                'This connection is currently active. Changes will take effect after reconnecting.',
+                'Continue', 'Cancel'
+            );
+            if (proceed !== 'Continue') {
+                return;
+            }
+        }
+
+        // Edit connection name
+        const name = await vscode.window.showInputBox({
+            prompt: 'Connection name',
+            value: existingConfig.name,
+            validateInput: (value) => value ? null : 'Connection name is required'
+        });
+        if (!name) { return; }
+
+        // Edit host
+        const host = await vscode.window.showInputBox({
+            prompt: 'Host',
+            value: existingConfig.host,
+            validateInput: (value) => value ? null : 'Host is required'
+        });
+        if (!host) { return; }
+
+        // Edit port
+        const portStr = await vscode.window.showInputBox({
+            prompt: 'Port',
+            value: existingConfig.port.toString(),
+            validateInput: (value) => {
+                const port = parseInt(value);
+                if (isNaN(port) || port < 1 || port > 65535) {
+                    return 'Please enter a valid port number (1-65535)';
+                }
+                return null;
+            }
+        });
+        if (!portStr) { return; }
+
+        // Edit username
+        const username = await vscode.window.showInputBox({
+            prompt: 'Username',
+            value: existingConfig.username
+        });
+        if (username === undefined) { return; }
+
+        // Ask if user wants to change password
+        const changePassword = await vscode.window.showQuickPick(
+            ['Keep existing password', 'Change password'],
+            { placeHolder: 'Password options' }
+        );
+        if (!changePassword) { return; }
+
+        let newPassword: string | undefined;
+        if (changePassword === 'Change password') {
+            newPassword = await vscode.window.showInputBox({
+                prompt: 'New Password',
+                password: true
+            });
+            if (newPassword === undefined) { return; }
+        }
+
+        // Edit database
+        const database = await vscode.window.showInputBox({
+            prompt: 'Database (optional)',
+            value: existingConfig.database || '',
+            placeHolder: 'Leave empty to connect without specific database'
+        });
+        if (database === undefined) { return; }
+
+        // Edit SSL option
+        const sslOption = await vscode.window.showQuickPick(
+            [
+                { label: 'Disable SSL', value: false },
+                { label: 'Enable SSL', value: true }
+            ],
+            { 
+                placeHolder: 'SSL Configuration',
+                canPickMany: false
+            }
+        );
+        if (!sslOption) { return; }
+
+        // Create updated config
+        const updatedConfig = {
+            ...existingConfig,
+            name,
+            host,
+            port: parseInt(portStr),
+            username: username || '',
+            database: database || undefined,
+            ssl: sslOption.value
+        };
+
+        // Test connection if password changed or host/port changed
+        const shouldTest = newPassword !== undefined || 
+            host !== existingConfig.host || 
+            parseInt(portStr) !== existingConfig.port;
+
+        if (shouldTest) {
+            const testPassword = newPassword !== undefined 
+                ? newPassword 
+                : await connectionManager.getPassword(connectionId) || '';
+
+            const testResult = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Testing connection...',
+                cancellable: false
+            }, async () => {
+                return await connectionManager.testConnection(updatedConfig, testPassword);
+            });
+
+            if (!testResult) {
+                const retry = await vscode.window.showErrorMessage(
+                    'Connection test failed. Would you like to save changes anyway?',
+                    'Save Anyway', 'Cancel'
+                );
+                if (retry !== 'Save Anyway') {
+                    return;
+                }
+            } else {
+                vscode.window.showInformationMessage('Connection test successful!');
+            }
+        }
+
+        // Save updated connection
+        await connectionManager.updateConnection(updatedConfig, newPassword);
+
+        // If connected, offer to reconnect
+        if (isConnected) {
+            const reconnect = await vscode.window.showInformationMessage(
+                `Connection '${name}' updated successfully. Reconnect now?`,
+                'Reconnect', 'Later'
+            );
+            if (reconnect === 'Reconnect') {
+                await connectionManager.disconnect(connectionId);
+                await connectionManager.connect(connectionId);
+            }
+        } else {
+            vscode.window.showInformationMessage(`Connection '${name}' updated successfully`);
+        }
+
+        // Refresh tree view
+        treeProvider.refresh();
+
+    } catch (error) {
+        Logger.error('Failed to edit connection', error as Error);
+        vscode.window.showErrorMessage(`Failed to edit connection: ${(error as Error).message}`);
+    }
 }
 
 /**
@@ -422,6 +682,630 @@ function getDefaultPort(type: DatabaseType): string {
         default:
             return '3306';
     }
+}
+
+/**
+ * Export format for connections (without sensitive data)
+ */
+interface ExportedConnection {
+    name: string;
+    type: DatabaseType;
+    host: string;
+    port: number;
+    username: string;
+    database?: string;
+    ssl?: boolean;
+    options?: Record<string, any>;
+}
+
+interface ConnectionsExport {
+    version: string;
+    exportDate: string;
+    connections: ExportedConnection[];
+}
+
+/**
+ * Export connections to a JSON file
+ */
+async function exportConnections(connectionManager: ConnectionManager): Promise<void> {
+    try {
+        const connections = connectionManager.getAllConnections();
+
+        if (connections.length === 0) {
+            vscode.window.showWarningMessage('No connections to export');
+            return;
+        }
+
+        // Ask user what to export
+        const exportOption = await vscode.window.showQuickPick(
+            [
+                { label: 'Export All Connections', value: 'all' },
+                { label: 'Select Connections to Export', value: 'select' }
+            ],
+            { placeHolder: 'Choose export option' }
+        );
+
+        if (!exportOption) { return; }
+
+        let connectionsToExport: ConnectionConfig[] = connections;
+
+        if (exportOption.value === 'select') {
+            const selected = await vscode.window.showQuickPick(
+                connections.map(conn => ({
+                    label: conn.name,
+                    description: `${conn.type} - ${conn.host}:${conn.port}`,
+                    picked: true,
+                    connection: conn
+                })),
+                {
+                    placeHolder: 'Select connections to export',
+                    canPickMany: true
+                }
+            );
+
+            if (!selected || selected.length === 0) {
+                return;
+            }
+
+            connectionsToExport = selected.map(s => s.connection);
+        }
+
+        // Ask about including passwords
+        const includePasswords = await vscode.window.showQuickPick(
+            [
+                { label: 'No - Export without passwords (recommended)', value: false },
+                { label: 'Yes - Include passwords (less secure)', value: true }
+            ],
+            { placeHolder: 'Include passwords in export?' }
+        );
+
+        if (!includePasswords) { return; }
+
+        // Prepare export data
+        const exportData: ConnectionsExport = {
+            version: '1.0.0',
+            exportDate: new Date().toISOString(),
+            connections: []
+        };
+
+        for (const conn of connectionsToExport) {
+            const exportedConn: ExportedConnection & { password?: string } = {
+                name: conn.name,
+                type: conn.type,
+                host: conn.host,
+                port: conn.port,
+                username: conn.username,
+                database: conn.database,
+                ssl: conn.ssl,
+                options: conn.options
+            };
+
+            if (includePasswords.value) {
+                const password = await connectionManager.getPassword(conn.id);
+                if (password) {
+                    exportedConn.password = password;
+                }
+            }
+
+            exportData.connections.push(exportedConn);
+        }
+
+        // Show save dialog
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(`db-connections-${new Date().toISOString().split('T')[0]}.json`),
+            filters: {
+                'JSON Files': ['json'],
+                'All Files': ['*']
+            },
+            saveLabel: 'Export Connections'
+        });
+
+        if (!uri) { return; }
+
+        // Write file
+        const content = JSON.stringify(exportData, null, 2);
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+
+        vscode.window.showInformationMessage(
+            `Successfully exported ${connectionsToExport.length} connection(s) to ${uri.fsPath}`
+        );
+
+        Logger.info(`Exported ${connectionsToExport.length} connections to ${uri.fsPath}`);
+
+    } catch (error) {
+        Logger.error('Failed to export connections', error as Error);
+        vscode.window.showErrorMessage(`Failed to export connections: ${(error as Error).message}`);
+    }
+}
+
+/**
+ * Import connections from a JSON file
+ */
+async function importConnections(
+    connectionManager: ConnectionManager,
+    treeProvider: DatabaseTreeProvider
+): Promise<void> {
+    try {
+        // Show open dialog
+        const uris = await vscode.window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: {
+                'JSON Files': ['json'],
+                'All Files': ['*']
+            },
+            openLabel: 'Import Connections'
+        });
+
+        if (!uris || uris.length === 0) { return; }
+
+        // Read file
+        const fileContent = await vscode.workspace.fs.readFile(uris[0]);
+        const content = Buffer.from(fileContent).toString('utf8');
+
+        let importData: ConnectionsExport;
+        try {
+            importData = JSON.parse(content);
+        } catch {
+            vscode.window.showErrorMessage('Invalid JSON file. Please select a valid connections export file.');
+            return;
+        }
+
+        // Validate structure
+        if (!importData.connections || !Array.isArray(importData.connections)) {
+            vscode.window.showErrorMessage('Invalid export file format. Missing connections array.');
+            return;
+        }
+
+        if (importData.connections.length === 0) {
+            vscode.window.showWarningMessage('No connections found in the export file.');
+            return;
+        }
+
+        // Show import preview
+        const preview = await vscode.window.showQuickPick(
+            importData.connections.map((conn, index) => ({
+                label: conn.name,
+                description: `${conn.type} - ${conn.host}:${conn.port}`,
+                detail: conn.database ? `Database: ${conn.database}` : 'No default database',
+                picked: true,
+                index
+            })),
+            {
+                placeHolder: `Select connections to import (${importData.connections.length} found)`,
+                canPickMany: true
+            }
+        );
+
+        if (!preview || preview.length === 0) { return; }
+
+        // Import selected connections
+        let imported = 0;
+        let skipped = 0;
+        const errors: string[] = [];
+
+        for (const item of preview) {
+            const conn = importData.connections[item.index] as ExportedConnection & { password?: string };
+
+            try {
+                // Check for duplicate names
+                const existingConnections = connectionManager.getAllConnections();
+                const duplicate = existingConnections.find(c => c.name === conn.name);
+
+                let finalName = conn.name;
+                if (duplicate) {
+                    const action = await vscode.window.showQuickPick(
+                        [
+                            { label: 'Rename', value: 'rename', description: 'Import with a new name' },
+                            { label: 'Skip', value: 'skip', description: 'Do not import this connection' },
+                            { label: 'Replace', value: 'replace', description: 'Replace existing connection' }
+                        ],
+                        { placeHolder: `Connection "${conn.name}" already exists` }
+                    );
+
+                    if (!action || action.value === 'skip') {
+                        skipped++;
+                        continue;
+                    }
+
+                    if (action.value === 'rename') {
+                        const newName = await vscode.window.showInputBox({
+                            prompt: 'Enter new name for the connection',
+                            value: `${conn.name} (imported)`,
+                            validateInput: (value) => {
+                                if (!value) { return 'Name is required'; }
+                                if (existingConnections.find(c => c.name === value)) {
+                                    return 'A connection with this name already exists';
+                                }
+                                return null;
+                            }
+                        });
+
+                        if (!newName) {
+                            skipped++;
+                            continue;
+                        }
+                        finalName = newName;
+                    } else if (action.value === 'replace') {
+                        await connectionManager.removeConnection(duplicate.id);
+                    }
+                }
+
+                // Get password if not included in export
+                let password = conn.password || '';
+                if (!password) {
+                    const inputPassword = await vscode.window.showInputBox({
+                        prompt: `Enter password for "${finalName}" (${conn.username}@${conn.host})`,
+                        password: true,
+                        placeHolder: 'Leave empty if no password required'
+                    });
+
+                    if (inputPassword === undefined) {
+                        skipped++;
+                        continue;
+                    }
+                    password = inputPassword;
+                }
+
+                // Create connection config
+                const config: ConnectionConfig = {
+                    id: '',
+                    name: finalName,
+                    type: conn.type,
+                    host: conn.host,
+                    port: conn.port,
+                    username: conn.username,
+                    database: conn.database,
+                    ssl: conn.ssl,
+                    options: conn.options
+                };
+
+                await connectionManager.addConnection(config, password);
+                imported++;
+
+            } catch (err) {
+                errors.push(`${conn.name}: ${(err as Error).message}`);
+            }
+        }
+
+        // Refresh tree
+        treeProvider.refresh();
+
+        // Show results
+        let message = `Import complete: ${imported} imported`;
+        if (skipped > 0) {
+            message += `, ${skipped} skipped`;
+        }
+        if (errors.length > 0) {
+            message += `, ${errors.length} failed`;
+            Logger.error('Import errors', new Error(errors.join('; ')));
+        }
+
+        vscode.window.showInformationMessage(message);
+        Logger.info(`Import complete: ${imported} imported, ${skipped} skipped, ${errors.length} errors`);
+
+    } catch (error) {
+        Logger.error('Failed to import connections', error as Error);
+        vscode.window.showErrorMessage(`Failed to import connections: ${(error as Error).message}`);
+    }
+}
+
+/**
+ * Query template types
+ */
+type TemplateType = 'select' | 'insert' | 'update' | 'delete' | 'count' | 'distinct' | 'join' | 'create' | 'alter' | 'drop';
+
+interface QueryTemplate {
+    label: string;
+    description: string;
+    template: string;
+    requiresTable?: boolean;
+    sqlOnly?: boolean;
+    mongoTemplate?: string;
+}
+
+/**
+ * Available query templates
+ */
+const QUERY_TEMPLATES: Record<TemplateType, QueryTemplate> = {
+    select: {
+        label: '$(search) SELECT',
+        description: 'Select all columns from a table',
+        template: 'SELECT *\nFROM {database}.{table}\nWHERE 1=1\nLIMIT 100;',
+        mongoTemplate: 'db.{collection}.find({}).limit(100);',
+        requiresTable: true
+    },
+    insert: {
+        label: '$(add) INSERT',
+        description: 'Insert a new row',
+        template: 'INSERT INTO {database}.{table} ({columns})\nVALUES ({values});',
+        mongoTemplate: 'db.{collection}.insertOne({\n  {fields}\n});',
+        requiresTable: true,
+        sqlOnly: false
+    },
+    update: {
+        label: '$(edit) UPDATE',
+        description: 'Update existing rows',
+        template: 'UPDATE {database}.{table}\nSET {column} = {value}\nWHERE {condition};',
+        mongoTemplate: 'db.{collection}.updateMany(\n  { /* filter */ },\n  { $set: { /* fields */ } }\n);',
+        requiresTable: true
+    },
+    delete: {
+        label: '$(trash) DELETE',
+        description: 'Delete rows from a table',
+        template: 'DELETE FROM {database}.{table}\nWHERE {condition};',
+        mongoTemplate: 'db.{collection}.deleteMany({ /* filter */ });',
+        requiresTable: true
+    },
+    count: {
+        label: '$(symbol-number) COUNT',
+        description: 'Count rows in a table',
+        template: 'SELECT COUNT(*) AS total\nFROM {database}.{table}\nWHERE 1=1;',
+        mongoTemplate: 'db.{collection}.countDocuments({});',
+        requiresTable: true
+    },
+    distinct: {
+        label: '$(filter) DISTINCT',
+        description: 'Select distinct values',
+        template: 'SELECT DISTINCT {column}\nFROM {database}.{table}\nORDER BY {column};',
+        mongoTemplate: 'db.{collection}.distinct("{field}");',
+        requiresTable: true
+    },
+    join: {
+        label: '$(git-merge) JOIN',
+        description: 'Join two tables',
+        template: 'SELECT t1.*, t2.*\nFROM {database}.{table} t1\nINNER JOIN {database}.{table2} t2\n  ON t1.{column} = t2.{column}\nLIMIT 100;',
+        requiresTable: true,
+        sqlOnly: true
+    },
+    create: {
+        label: '$(new-file) CREATE TABLE',
+        description: 'Create a new table',
+        template: 'CREATE TABLE {database}.{tableName} (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);',
+        sqlOnly: true
+    },
+    alter: {
+        label: '$(tools) ALTER TABLE',
+        description: 'Modify table structure',
+        template: 'ALTER TABLE {database}.{table}\nADD COLUMN {columnName} {dataType};',
+        requiresTable: true,
+        sqlOnly: true
+    },
+    drop: {
+        label: '$(warning) DROP TABLE',
+        description: 'Drop a table (dangerous!)',
+        template: '-- WARNING: This will permanently delete the table!\nDROP TABLE IF EXISTS {database}.{table};',
+        mongoTemplate: 'db.{collection}.drop();',
+        requiresTable: true
+    }
+};
+
+/**
+ * Show query templates picker
+ */
+async function showQueryTemplates(connectionManager: ConnectionManager): Promise<void> {
+    try {
+        // Get connected connections
+        const connections = connectionManager.getAllConnections();
+        const connectedConnections = connections.filter(conn =>
+            connectionManager.getProvider(conn.id) !== undefined
+        );
+
+        if (connectedConnections.length === 0) {
+            vscode.window.showWarningMessage('No active connections. Please connect to a database first.');
+            return;
+        }
+
+        // Select connection
+        const selectedConn = await vscode.window.showQuickPick(
+            connectedConnections.map(conn => ({
+                label: conn.name,
+                description: `${conn.type} - ${conn.host}:${conn.port}`,
+                connection: conn
+            })),
+            { placeHolder: 'Select a connection' }
+        );
+
+        if (!selectedConn) { return; }
+
+        const isMongo = selectedConn.connection.type === DatabaseType.MongoDB;
+
+        // Filter templates based on database type
+        const availableTemplates = Object.entries(QUERY_TEMPLATES)
+            .filter(([_, template]) => !template.sqlOnly || !isMongo)
+            .map(([key, template]) => ({
+                label: template.label,
+                description: template.description,
+                key: key as TemplateType
+            }));
+
+        // Select template
+        const selectedTemplate = await vscode.window.showQuickPick(availableTemplates, {
+            placeHolder: 'Select a query template'
+        });
+
+        if (!selectedTemplate) { return; }
+
+        const template = QUERY_TEMPLATES[selectedTemplate.key];
+
+        // If template requires a table, ask for it
+        let database = selectedConn.connection.database || '';
+        let table = '';
+        let columns: string[] = [];
+
+        if (template.requiresTable) {
+            const provider = connectionManager.getProvider(selectedConn.connection.id);
+            if (!provider) { return; }
+
+            // Get databases
+            const databases = await provider.getDatabases();
+            
+            // Select database
+            const selectedDb = await vscode.window.showQuickPick(
+                databases.map(db => ({ label: db.name })),
+                { placeHolder: 'Select a database' }
+            );
+
+            if (!selectedDb) { return; }
+            database = selectedDb.label;
+
+            // Get tables/collections
+            if (isMongo) {
+                const dbInfo = databases.find(d => d.name === database);
+                if (dbInfo?.collections) {
+                    const selectedColl = await vscode.window.showQuickPick(
+                        dbInfo.collections.map(c => ({ label: c.name })),
+                        { placeHolder: 'Select a collection' }
+                    );
+                    if (!selectedColl) { return; }
+                    table = selectedColl.label;
+                }
+            } else {
+                const tables = await provider.getTables(database);
+                const selectedTable = await vscode.window.showQuickPick(
+                    tables.map(t => ({ label: t.name })),
+                    { placeHolder: 'Select a table' }
+                );
+                if (!selectedTable) { return; }
+                table = selectedTable.label;
+
+                // Get columns for INSERT/UPDATE templates
+                if (['insert', 'update', 'distinct'].includes(selectedTemplate.key)) {
+                    columns = (await provider.getColumns(database, table)).map(c => c.name);
+                }
+            }
+        }
+
+        // Generate query from template
+        const query = generateQueryFromTemplate(
+            isMongo ? (template.mongoTemplate || template.template) : template.template,
+            database,
+            table,
+            columns,
+            isMongo
+        );
+
+        // Open new document with the query
+        const doc = await vscode.workspace.openTextDocument({
+            content: query,
+            language: isMongo ? 'javascript' : 'sql'
+        });
+        await vscode.window.showTextDocument(doc);
+
+    } catch (error) {
+        Logger.error('Failed to show query templates', error as Error);
+        vscode.window.showErrorMessage(`Failed to show templates: ${(error as Error).message}`);
+    }
+}
+
+/**
+ * Generate query from a table context (right-click menu)
+ */
+async function generateQueryTemplate(
+    connectionManager: ConnectionManager,
+    item: any,
+    templateType: TemplateType
+): Promise<void> {
+    try {
+        let connectionId: string;
+        let database: string;
+        let tableName: string;
+        let isMongo = false;
+
+        if (item instanceof TableTreeItem) {
+            connectionId = item.connectionId;
+            database = item.databaseName;
+            tableName = item.tableName;
+        } else if (item instanceof CollectionTreeItem) {
+            connectionId = item.connectionId;
+            database = item.databaseName;
+            tableName = item.collectionName;
+            isMongo = true;
+        } else {
+            vscode.window.showWarningMessage('Please select a table or collection');
+            return;
+        }
+
+        const connection = connectionManager.getConnection(connectionId);
+        if (!connection) {
+            vscode.window.showErrorMessage('Connection not found');
+            return;
+        }
+
+        isMongo = connection.type === DatabaseType.MongoDB;
+        const template = QUERY_TEMPLATES[templateType];
+
+        if (template.sqlOnly && isMongo) {
+            vscode.window.showWarningMessage('This template is not available for MongoDB');
+            return;
+        }
+
+        // Get columns if needed
+        let columns: string[] = [];
+        if (['insert', 'update', 'distinct'].includes(templateType) && !isMongo) {
+            const provider = connectionManager.getProvider(connectionId);
+            if (provider) {
+                columns = (await provider.getColumns(database, tableName)).map(c => c.name);
+            }
+        }
+
+        // Generate query
+        const templateStr = isMongo ? (template.mongoTemplate || template.template) : template.template;
+        const query = generateQueryFromTemplate(templateStr, database, tableName, columns, isMongo);
+
+        // Open new document with the query
+        const doc = await vscode.workspace.openTextDocument({
+            content: `-- Connection: ${connection.name}\n-- Database: ${database}\n-- Table: ${tableName}\n\n${query}`,
+            language: isMongo ? 'javascript' : 'sql'
+        });
+        await vscode.window.showTextDocument(doc);
+
+    } catch (error) {
+        Logger.error('Failed to generate query template', error as Error);
+        vscode.window.showErrorMessage(`Failed to generate template: ${(error as Error).message}`);
+    }
+}
+
+/**
+ * Generate query string from template
+ */
+function generateQueryFromTemplate(
+    template: string,
+    database: string,
+    table: string,
+    columns: string[],
+    _isMongo: boolean
+): string {
+    let query = template
+        .replace(/{database}/g, database)
+        .replace(/{table}/g, table)
+        .replace(/{collection}/g, table)
+        .replace(/{tableName}/g, 'new_table')
+        .replace(/{table2}/g, 'other_table')
+        .replace(/{condition}/g, 'id = 1')
+        .replace(/{columnName}/g, 'new_column')
+        .replace(/{dataType}/g, 'VARCHAR(255)');
+
+    if (columns.length > 0) {
+        query = query
+            .replace(/{columns}/g, columns.join(', '))
+            .replace(/{values}/g, columns.map(() => '?').join(', '))
+            .replace(/{column}/g, columns[0] || 'column_name')
+            .replace(/{value}/g, "'new_value'")
+            .replace(/{field}/g, columns[0] || 'field_name')
+            .replace(/{fields}/g, columns.slice(0, 3).map(c => `${c}: "value"`).join(',\n  '));
+    } else {
+        query = query
+            .replace(/{columns}/g, 'column1, column2')
+            .replace(/{values}/g, "'value1', 'value2'")
+            .replace(/{column}/g, 'column_name')
+            .replace(/{value}/g, "'new_value'")
+            .replace(/{field}/g, 'field_name')
+            .replace(/{fields}/g, 'field1: "value1",\n  field2: "value2"');
+    }
+
+    return query;
 }
 
 /**

@@ -2,7 +2,7 @@
   "name": "db-connector-extension",
   "displayName": "DB Connector Extension",
   "description": "Multi-database connection manager and query tool for MySQL, PostgreSQL, SQL Server, MongoDB, and MariaDB",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "YamidCuetoMazo",
   "icon": "icon.png",
   "license": "MIT",
@@ -63,6 +63,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "dbConnector.executeQueryAtCursor",
+        "title": "Run Query",
+        "category": "DB Connector",
+        "icon": "$(play)"
+      },
+      {
         "command": "dbConnector.newQuery",
         "title": "New Query",
         "category": "DB Connector",
@@ -103,6 +109,44 @@
         "title": "Select Top 100",
         "category": "DB Connector",
         "icon": "$(play)"
+      },
+      {
+        "command": "dbConnector.exportConnections",
+        "title": "Export Connections",
+        "category": "DB Connector",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "dbConnector.importConnections",
+        "title": "Import Connections",
+        "category": "DB Connector",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "dbConnector.queryTemplates",
+        "title": "Query Templates",
+        "category": "DB Connector",
+        "icon": "$(symbol-snippet)"
+      },
+      {
+        "command": "dbConnector.generateSelect",
+        "title": "Generate SELECT",
+        "category": "DB Connector"
+      },
+      {
+        "command": "dbConnector.generateInsert",
+        "title": "Generate INSERT",
+        "category": "DB Connector"
+      },
+      {
+        "command": "dbConnector.generateUpdate",
+        "title": "Generate UPDATE",
+        "category": "DB Connector"
+      },
+      {
+        "command": "dbConnector.generateDelete",
+        "title": "Generate DELETE",
+        "category": "DB Connector"
       }
     ],
     "viewsContainers": {
@@ -146,6 +190,16 @@
           "command": "dbConnector.showQueryHistory",
           "when": "view == dbConnector",
           "group": "navigation@3"
+        },
+        {
+          "command": "dbConnector.exportConnections",
+          "when": "view == dbConnector",
+          "group": "2_importexport@1"
+        },
+        {
+          "command": "dbConnector.importConnections",
+          "when": "view == dbConnector",
+          "group": "2_importexport@2"
         }
       ],
       "view/item/context": [
@@ -170,6 +224,26 @@
           "group": "1_query@2"
         },
         {
+          "command": "dbConnector.generateSelect",
+          "when": "view == dbConnector && viewItem =~ /^(table|collection)$/",
+          "group": "1_templates@1"
+        },
+        {
+          "command": "dbConnector.generateInsert",
+          "when": "view == dbConnector && viewItem == table",
+          "group": "1_templates@2"
+        },
+        {
+          "command": "dbConnector.generateUpdate",
+          "when": "view == dbConnector && viewItem == table",
+          "group": "1_templates@3"
+        },
+        {
+          "command": "dbConnector.generateDelete",
+          "when": "view == dbConnector && viewItem =~ /^(table|collection)$/",
+          "group": "1_templates@4"
+        },
+        {
           "command": "dbConnector.refreshConnection",
           "when": "view == dbConnector && viewItem =~ /^(connection-|database|table|collection)$/",
           "group": "2_actions@1"
@@ -191,8 +265,39 @@
           "when": "editorLangId == sql || editorLangId == javascript || resourceExtname == .sql || resourceExtname == .mongodb",
           "group": "navigation@1"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "dbConnector.executeQuery",
+          "when": "editorLangId == sql || editorLangId == javascript",
+          "group": "1_dbconnector@1"
+        },
+        {
+          "command": "dbConnector.queryTemplates",
+          "when": "editorLangId == sql",
+          "group": "1_dbconnector@2"
+        }
       ]
     },
+    "keybindings": [
+      {
+        "command": "dbConnector.executeQuery",
+        "key": "f5",
+        "when": "editorTextFocus && (editorLangId == sql || editorLangId == javascript)"
+      },
+      {
+        "command": "dbConnector.executeQuery",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && (editorLangId == sql || editorLangId == javascript)"
+      },
+      {
+        "command": "dbConnector.newQuery",
+        "key": "ctrl+n",
+        "mac": "cmd+n",
+        "when": "view == dbConnector && focusedView == dbConnector"
+      }
+    ],
     "configuration": {
       "title": "DB Connector",
       "properties": {

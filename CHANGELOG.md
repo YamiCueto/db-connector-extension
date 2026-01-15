@@ -2,6 +2,89 @@
 
 All notable changes to the "DB Connector Extension" will be documented in this file.
 
+## [1.1.0] - 2026-01-15
+
+### Added
+
+#### Edit Connection
+- Full connection editing with validation
+- Test connection before saving changes
+- SSL configuration options
+- Password change option
+- Reconnect after edit for active connections
+
+#### Import/Export Connections
+- Export connections to JSON file
+- Selective export (all or specific connections)
+- Optional password inclusion in export
+- Import with duplicate handling (rename, skip, replace)
+- Backup and share connection configurations
+
+#### Multi-Query Execution
+- Execute multiple queries separated by semicolon
+- Tabbed results panel for each query
+- Individual export/copy per result
+- Progress indicator with cancellation support
+- Smart query splitting respecting strings and comments
+
+#### Query Templates
+- 10 SQL templates (SELECT, INSERT, UPDATE, DELETE, COUNT, DISTINCT, JOIN, CREATE, ALTER, DROP)
+- MongoDB templates support
+- Context menu integration on tables
+- Auto-fill with table columns
+
+#### SQL IntelliSense (Autocomplete)
+- SQL keywords completion
+- SQL functions with snippets
+- Table and column suggestions from connected databases
+- 14 code snippets (sel, selw, ins, upd, del, cte, case, join, ljoin, grp, sub, exist, ctab, idx)
+- Schema caching with 5-minute timeout
+
+#### CodeLens (Run Query Buttons)
+- "▶ Run Query" button above each SQL statement
+- "▶▶ Run All Queries" for files with multiple queries
+- Click to execute individual queries
+- Query highlighting during execution
+
+#### Auto-detect Connection
+- File header comments to specify connection and database
+- Format: `-- Connection: ConnectionName` and `-- Database: DatabaseName`
+- Automatic connection selection when executing queries
+- Skip connection picker when only one connection is active
+
+#### Keyboard Shortcuts
+- `F5` - Execute query
+- `Ctrl+Enter` / `Cmd+Enter` - Execute query
+- Context menu "DB Connector: Execute Query"
+
+### Fixed
+- Connection state detection using ConnectionState enum
+- Webpack warnings for optional MongoDB/PostgreSQL dependencies
+
+### Changed
+- Improved query executor with better error handling
+- Enhanced results panel with tabbed interface
+- Better logging and diagnostics
+
+---
+
+## [1.0.0] - Initial Release
+
+### Added
+- Multi-database support for MySQL, PostgreSQL, SQL Server, MongoDB, and MariaDB
+- Secure credential storage using VS Code Secret Storage API
+- Database explorer tree view
+- Query execution with results panel
+- Query history tracking
+- Export results to CSV and JSON
+- Connection management (add, remove, connect, disconnect)
+- Status bar showing active connections
+- Syntax highlighting for SQL and MongoDB queries
+- Webview results panel with rich formatting
+- Configuration options for timeouts and display preferences
+
+---
+
 ## [0.0.1] - Initial Release
 
 ### Added

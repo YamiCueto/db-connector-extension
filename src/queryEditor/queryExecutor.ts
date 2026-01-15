@@ -1,8 +1,16 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connectionManager';
-import { QueryResult, QueryHistoryEntry } from '../types';
+import { QueryResult, QueryHistoryEntry, DatabaseType, ConnectionState } from '../types';
 import { Logger } from '../utils/logger';
 import { ResultsPanel } from './resultsPanel';
+
+/**
+ * Multi-query result with query text
+ */
+export interface MultiQueryResult {
+    query: string;
+    result: QueryResult;
+}
 
 /**
  * Query executor for running database queries
@@ -29,9 +37,12 @@ export class QueryExecutor {
             return;
         }
 
-        // Get selected text or entire document
+        // Get full document text to check for connection header
+        const fullText = editor.document.getText();
+        
+        // Get selected text or entire document for query
         const query = editor.selection.isEmpty
-            ? editor.document.getText()
+            ? fullText
             : editor.document.getText(editor.selection);
 
         if (!query.trim()) {
@@ -39,36 +50,247 @@ export class QueryExecutor {
             return;
         }
 
-        // Ask user to select a connection
+        // Try to detect connection from file header comments
+        const detectedConnection = this.detectConnectionFromHeader(fullText);
+        const detectedDatabase = this.detectDatabaseFromHeader(fullText);
+
+        // Get all connections
         const connections = this.connectionManager.getAllConnections();
+        Logger.debug(`Found ${connections.length} total connections`);
+        
         if (connections.length === 0) {
             vscode.window.showWarningMessage('No database connections available. Please add a connection first.');
             return;
         }
 
-        const connectedConnections = connections.filter(conn =>
-            this.connectionManager.getProvider(conn.id) !== undefined
-        );
+        // Filter only truly connected connections (check state, not just provider existence)
+        const connectedConnections = connections.filter(conn => {
+            const state = this.connectionManager.getConnectionState(conn.id);
+            return state === ConnectionState.Connected;
+        });
+
+        Logger.debug(`Found ${connectedConnections.length} active connections`);
 
         if (connectedConnections.length === 0) {
             vscode.window.showWarningMessage('No active connections. Please connect to a database first.');
             return;
         }
 
-        const selectedConn = await vscode.window.showQuickPick(
-            connectedConnections.map(conn => ({
-                label: conn.name,
-                description: `${conn.type} - ${conn.host}:${conn.port}`,
-                connection: conn
-            })),
-            { placeHolder: 'Select a connection to execute the query' }
-        );
+        let selectedConnection: typeof connections[0] | undefined;
+        let database: string | undefined = detectedDatabase;
 
-        if (!selectedConn) {
+        // If connection detected from header, try to find it
+        if (detectedConnection) {
+            selectedConnection = connectedConnections.find(
+                conn => conn.name.toLowerCase() === detectedConnection.toLowerCase()
+            );
+            
+            if (selectedConnection) {
+                Logger.info(`Auto-detected connection: ${selectedConnection.name}`);
+            } else {
+                Logger.warn(`Connection "${detectedConnection}" not found or not connected`);
+            }
+        }
+
+        // If no connection detected or not found, ask user to select
+        if (!selectedConnection) {
+            // If only one connection, use it directly
+            if (connectedConnections.length === 1) {
+                selectedConnection = connectedConnections[0];
+                Logger.info(`Using only available connection: ${selectedConnection.name}`);
+            } else {
+                const selected = await vscode.window.showQuickPick(
+                    connectedConnections.map(conn => ({
+                        label: conn.name,
+                        description: `${conn.type} - ${conn.host}:${conn.port}`,
+                        connection: conn
+                    })),
+                    { placeHolder: 'Select a connection to execute the query' }
+                );
+
+                if (!selected) {
+                    return;
+                }
+                selectedConnection = selected.connection;
+            }
+        }
+
+        await this.executeQuery(selectedConnection.id, query, database);
+    }
+
+    /**
+     * Execute a query at a specific range (from CodeLens)
+     */
+    public async executeQueryAtRange(range: vscode.Range): Promise<void> {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('No active editor found');
             return;
         }
 
-        await this.executeQuery(selectedConn.connection.id, query);
+        // Get the query text from the range
+        const query = editor.document.getText(range);
+        
+        if (!query.trim()) {
+            vscode.window.showWarningMessage('No query to execute');
+            return;
+        }
+
+        // Get full document text to detect connection
+        const fullText = editor.document.getText();
+        const detectedConnection = this.detectConnectionFromHeader(fullText);
+        const detectedDatabase = this.detectDatabaseFromHeader(fullText);
+
+        // Get all connections
+        const connections = this.connectionManager.getAllConnections();
+        
+        if (connections.length === 0) {
+            vscode.window.showWarningMessage('No database connections available. Please add a connection first.');
+            return;
+        }
+
+        // Filter only connected connections
+        const connectedConnections = connections.filter(conn => {
+            const state = this.connectionManager.getConnectionState(conn.id);
+            return state === ConnectionState.Connected;
+        });
+
+        if (connectedConnections.length === 0) {
+            vscode.window.showWarningMessage('No active connections. Please connect to a database first.');
+            return;
+        }
+
+        let selectedConnection: typeof connections[0] | undefined;
+        let database: string | undefined = detectedDatabase;
+
+        // Try to find detected connection
+        if (detectedConnection) {
+            selectedConnection = connectedConnections.find(
+                conn => conn.name.toLowerCase() === detectedConnection.toLowerCase()
+            );
+            if (selectedConnection) {
+                Logger.info(`Auto-detected connection: ${selectedConnection.name}`);
+            }
+        }
+
+        // If no connection detected, use single or ask
+        if (!selectedConnection) {
+            if (connectedConnections.length === 1) {
+                selectedConnection = connectedConnections[0];
+            } else {
+                const selected = await vscode.window.showQuickPick(
+                    connectedConnections.map(conn => ({
+                        label: conn.name,
+                        description: `${conn.type} - ${conn.host}:${conn.port}`,
+                        connection: conn
+                    })),
+                    { placeHolder: 'Select a connection to execute the query' }
+                );
+                if (!selected) {
+                    return;
+                }
+                selectedConnection = selected.connection;
+            }
+        }
+
+        // Highlight the query being executed
+        editor.selection = new vscode.Selection(range.start, range.end);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+
+        await this.executeQuery(selectedConnection.id, query, database);
+    }
+
+    /**
+     * Detect connection name from file header comments
+     * Looks for: -- Connection: ConnectionName
+     */
+    private detectConnectionFromHeader(text: string): string | undefined {
+        const match = text.match(/^--\s*Connection:\s*(.+?)$/im);
+        return match ? match[1].trim() : undefined;
+    }
+
+    /**
+     * Detect database name from file header comments
+     * Looks for: -- Database: DatabaseName
+     */
+    private detectDatabaseFromHeader(text: string): string | undefined {
+        const match = text.match(/^--\s*Database:\s*(.+?)$/im);
+        return match ? match[1].trim() : undefined;
+    }
+
+    /**
+     * Split SQL query into multiple statements
+     */
+    private splitQueries(query: string, dbType: DatabaseType): string[] {
+        // For MongoDB, don't split - it uses JavaScript syntax
+        if (dbType === DatabaseType.MongoDB) {
+            return [query.trim()];
+        }
+
+        // Split by semicolon, handling strings and comments
+        const queries: string[] = [];
+        let currentQuery = '';
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        let inLineComment = false;
+        let inBlockComment = false;
+
+        for (let i = 0; i < query.length; i++) {
+            const char = query[i];
+            const nextChar = query[i + 1];
+
+            // Handle line comments
+            if (!inSingleQuote && !inDoubleQuote && !inBlockComment) {
+                if (char === '-' && nextChar === '-') {
+                    inLineComment = true;
+                }
+                if (char === '\n' && inLineComment) {
+                    inLineComment = false;
+                }
+            }
+
+            // Handle block comments
+            if (!inSingleQuote && !inDoubleQuote && !inLineComment) {
+                if (char === '/' && nextChar === '*') {
+                    inBlockComment = true;
+                }
+                if (char === '*' && nextChar === '/') {
+                    inBlockComment = false;
+                    currentQuery += '*/';
+                    i++;
+                    continue;
+                }
+            }
+
+            // Handle quotes
+            if (!inLineComment && !inBlockComment) {
+                if (char === "'" && !inDoubleQuote) {
+                    inSingleQuote = !inSingleQuote;
+                }
+                if (char === '"' && !inSingleQuote) {
+                    inDoubleQuote = !inDoubleQuote;
+                }
+            }
+
+            // Split on semicolon if not inside quotes or comments
+            if (char === ';' && !inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment) {
+                const trimmed = currentQuery.trim();
+                if (trimmed) {
+                    queries.push(trimmed);
+                }
+                currentQuery = '';
+            } else {
+                currentQuery += char;
+            }
+        }
+
+        // Add last query if not empty
+        const trimmed = currentQuery.trim();
+        if (trimmed) {
+            queries.push(trimmed);
+        }
+
+        return queries;
     }
 
     /**
@@ -81,29 +303,111 @@ export class QueryExecutor {
             return;
         }
 
+        const connection = this.connectionManager.getConnection(connectionId);
+        if (!connection) {
+            vscode.window.showErrorMessage('Connection configuration not found');
+            return;
+        }
+
+        // Split into multiple queries
+        const queries = this.splitQueries(query, connection.type);
+
+        if (queries.length === 0) {
+            vscode.window.showWarningMessage('No valid queries to execute');
+            return;
+        }
+
         try {
+            // Single query - use simple execution
+            if (queries.length === 1) {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Executing query...',
+                    cancellable: false
+                }, async () => {
+                    const result = await provider.executeQuery(queries[0], database);
+
+                    // Add to history
+                    this.addToHistory(connectionId, queries[0], result);
+
+                    // Show results
+                    ResultsPanel.show(this.context, result, queries[0]);
+
+                    if (result.error) {
+                        vscode.window.showErrorMessage(`Query failed: ${result.error}`);
+                    } else {
+                        const message = result.rows
+                            ? `Query executed successfully. ${result.rowCount} rows returned in ${result.executionTime}ms.`
+                            : `Query executed successfully. ${result.rowCount} rows affected in ${result.executionTime}ms.`;
+                        vscode.window.showInformationMessage(message);
+                    }
+                });
+                return;
+            }
+
+            // Multiple queries - execute sequentially and show combined results
+            const results: MultiQueryResult[] = [];
+            let hasError = false;
+            let totalTime = 0;
+
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: 'Executing query...',
-                cancellable: false
-            }, async () => {
-                const result = await provider.executeQuery(query, database);
+                title: `Executing ${queries.length} queries...`,
+                cancellable: true
+            }, async (progress, token) => {
+                for (let i = 0; i < queries.length; i++) {
+                    if (token.isCancellationRequested) {
+                        vscode.window.showWarningMessage(`Execution cancelled after ${i} queries`);
+                        break;
+                    }
 
-                // Add to history
-                this.addToHistory(connectionId, query, result);
+                    progress.report({
+                        message: `Query ${i + 1} of ${queries.length}`,
+                        increment: (100 / queries.length)
+                    });
 
-                // Show results
-                ResultsPanel.show(this.context, result, query);
+                    const q = queries[i];
+                    try {
+                        const result = await provider.executeQuery(q, database);
+                        results.push({ query: q, result });
+                        totalTime += result.executionTime;
 
-                if (result.error) {
-                    vscode.window.showErrorMessage(`Query failed: ${result.error}`);
-                } else {
-                    const message = result.rows
-                        ? `Query executed successfully. ${result.rowCount} rows returned in ${result.executionTime}ms.`
-                        : `Query executed successfully. ${result.rowCount} rows affected in ${result.executionTime}ms.`;
-                    vscode.window.showInformationMessage(message);
+                        // Add each query to history
+                        this.addToHistory(connectionId, q, result);
+
+                        if (result.error) {
+                            hasError = true;
+                        }
+                    } catch (error) {
+                        const errorResult: QueryResult = {
+                            rowCount: 0,
+                            executionTime: 0,
+                            error: (error as Error).message
+                        };
+                        results.push({ query: q, result: errorResult });
+                        hasError = true;
+                        this.addToHistory(connectionId, q, errorResult);
+                    }
                 }
             });
+
+            // Show combined results
+            ResultsPanel.showMultiple(this.context, results);
+
+            // Summary message
+            const successCount = results.filter(r => !r.result.error).length;
+            const errorCount = results.filter(r => r.result.error).length;
+
+            if (hasError) {
+                vscode.window.showWarningMessage(
+                    `Executed ${results.length} queries: ${successCount} successful, ${errorCount} failed. Total time: ${totalTime}ms`
+                );
+            } else {
+                vscode.window.showInformationMessage(
+                    `All ${results.length} queries executed successfully in ${totalTime}ms`
+                );
+            }
+
         } catch (error) {
             Logger.error('Query execution failed', error as Error);
             vscode.window.showErrorMessage(`Query execution failed: ${(error as Error).message}`);
