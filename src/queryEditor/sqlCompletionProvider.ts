@@ -1,3 +1,4 @@
+import { MSSQLProvider } from '../databaseProviders/mssqlProvider';
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connectionManager';
 import { DatabaseType, ColumnInfo } from '../types';
@@ -448,12 +449,12 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
                         continue;
                     }
 
-                    const tables = await provider.getTables(db.name);
+                    const tables = provider instanceof MSSQLProvider ? await provider.getTables() : await provider.getTables(db.name);
                     const tableSchemas: TableSchema[] = [];
 
                     for (const table of tables.slice(0, 50)) { // Limit to 50 tables per database
                         try {
-                            const columns = await provider.getColumns(db.name, table.name);
+                            const columns = provider instanceof MSSQLProvider ? await provider.getColumns(table.name) : await provider.getColumns(db.name, table.name);
                             tableSchemas.push({
                                 name: table.name,
                                 columns

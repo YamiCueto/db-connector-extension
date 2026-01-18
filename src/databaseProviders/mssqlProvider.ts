@@ -126,7 +126,7 @@ export class MSSQLProvider implements IDatabaseProvider {
     /**
      * Get list of tables
      */
-    public async getTables(database: string): Promise<TableInfo[]> {
+    public async getTables(): Promise<TableInfo[]> {
         this.ensureConnected();
 
         try {
@@ -135,9 +135,9 @@ export class MSSQLProvider implements IDatabaseProvider {
                     s.name as schema_name,
                     t.name as table_name,
                     p.rows as row_count
-                FROM ${database}.sys.tables t
-                INNER JOIN ${database}.sys.schemas s ON t.schema_id = s.schema_id
-                LEFT JOIN ${database}.sys.partitions p ON t.object_id = p.object_id AND p.index_id IN (0, 1)
+                FROM sys.tables t
+                INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+                LEFT JOIN sys.partitions p ON t.object_id = p.object_id AND p.index_id IN (0, 1)
                 ORDER BY s.name, t.name
             `);
 
@@ -155,7 +155,7 @@ export class MSSQLProvider implements IDatabaseProvider {
     /**
      * Get columns for a table
      */
-    public async getColumns(database: string, table: string): Promise<ColumnInfo[]> {
+    public async getColumns(table: string): Promise<ColumnInfo[]> {
         this.ensureConnected();
 
         try {
@@ -176,17 +176,17 @@ export class MSSQLProvider implements IDatabaseProvider {
                         ELSE 0
                     END as is_foreign_key,
                     dc.definition as default_value
-                FROM ${database}.sys.columns c
-                INNER JOIN ${database}.sys.tables tb ON c.object_id = tb.object_id
-                INNER JOIN ${database}.sys.types t ON c.user_type_id = t.user_type_id
+                FROM sys.columns c
+                INNER JOIN sys.tables tb ON c.object_id = tb.object_id
+                INNER JOIN sys.types t ON c.user_type_id = t.user_type_id
                 LEFT JOIN (
                     SELECT ic.object_id, ic.column_id
-                    FROM ${database}.sys.index_columns ic
-                    INNER JOIN ${database}.sys.indexes i ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+                    FROM sys.index_columns ic
+                    INNER JOIN sys.indexes i ON ic.object_id = i.object_id AND ic.index_id = i.index_id
                     WHERE i.is_primary_key = 1
                 ) pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
-                LEFT JOIN ${database}.sys.foreign_key_columns fk ON c.object_id = fk.parent_object_id AND c.column_id = fk.parent_column_id
-                LEFT JOIN ${database}.sys.default_constraints dc ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+                LEFT JOIN sys.foreign_key_columns fk ON c.object_id = fk.parent_object_id AND c.column_id = fk.parent_column_id
+                LEFT JOIN sys.default_constraints dc ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
                 WHERE tb.name = @tableName
                 ORDER BY c.column_id
             `);

@@ -1,3 +1,4 @@
+import { MSSQLProvider } from '../databaseProviders/mssqlProvider';
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connectionManager';
 import { Logger } from '../utils/logger';
@@ -142,7 +143,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<BaseTreeIte
             }
 
             // Handle SQL tables
-            const tables = await provider.getTables(element.databaseName);
+            const tables = provider instanceof MSSQLProvider ? await provider.getTables() : await provider.getTables(element.databaseName);
             return tables.map(table =>
                 new TableTreeItem(
                     element.connectionId,
@@ -168,7 +169,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<BaseTreeIte
         }
 
         try {
-            const columns = await provider.getColumns(element.databaseName, element.tableName);
+            const columns = provider instanceof MSSQLProvider ? await provider.getColumns(element.tableName) : await provider.getColumns(element.databaseName, element.tableName);
             return columns.map(col =>
                 new ColumnTreeItem(col.name, col.type, col.isPrimaryKey, col.nullable)
             );

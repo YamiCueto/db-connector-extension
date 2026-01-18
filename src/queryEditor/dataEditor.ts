@@ -1,3 +1,4 @@
+import { MSSQLProvider } from '../databaseProviders/mssqlProvider';
 import { ConnectionManager } from '../connectionManager';
 import { ColumnInfo, DatabaseType } from '../types';
 import { Logger } from '../utils/logger';
@@ -181,11 +182,15 @@ export class DataEditor {
             }
 
             const db = tableInfo.database || database || '';
-            const columns = await provider.getColumns(db, tableInfo.tableName);
-            
+            const columns = provider instanceof MSSQLProvider ? await provider.getColumns(tableInfo.tableName) : await provider.getColumns(db, tableInfo.tableName);
+
+            // Normalize column names for PK detection (ignore casing and brackets)
+            function normalizeColName(name: string) {
+                return name.replace(/^[`"\[\]]+|[`"\[\]]+$/g, '').toLowerCase();
+            }
             const primaryKeys = columns
                 .filter(col => col.isPrimaryKey)
-                .map(col => col.name);
+                .map(col => normalizeColName(col.name));
 
             if (primaryKeys.length === 0) {
                 return {

@@ -1,3 +1,11 @@
+# [1.3.0] - 2026-01-18
+
+### Fixed
+
+- **MSSQL Primary Key Detection**: Ahora la detección de claves primarias ignora mayúsculas, minúsculas y corchetes, permitiendo editar tablas con PK aunque el nombre esté entre corchetes o con distinto casing.
+- **Edición habilitada para tablas MSSQL con PK**: Ya puedes editar cualquier tabla con clave primaria en SQL Server, sin importar el formato del nombre.
+
+---
 # Change Log
 
 All notable changes to the "DB Connector Extension" will be documented in this file.

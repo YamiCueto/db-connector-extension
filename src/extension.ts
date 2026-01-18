@@ -1,3 +1,4 @@
+import { MSSQLProvider } from './databaseProviders/mssqlProvider';
 import * as vscode from 'vscode';
 import { ConnectionManager } from './connectionManager';
 import { DatabaseTreeProvider } from './treeView/databaseTreeProvider';
@@ -8,6 +9,19 @@ import { SqlCodeLensProvider } from './queryEditor/sqlCodeLensProvider';
 import { Logger } from './utils/logger';
 import { ConnectionConfig, DatabaseType } from './types';
 import { TableTreeItem, CollectionTreeItem, DatabaseTreeItem, ConnectionTreeItem } from './treeView/treeItems';
+
+/**
+ * Format SELECT query with proper pagination syntax
+ */
+function formatSelectQuery(dbType: DatabaseType, database: string, table: string, limit: number = 100, schema: string = 'dbo'): string {
+    if (dbType === DatabaseType.MSSQL) {
+        // SQL Server requires: database.schema.[table] (escape table with brackets)
+        const escapedTable = `[${table}]`;
+        return `SELECT TOP ${limit} * FROM ${database}.${schema}.${escapedTable}`;
+    } else {
+        return `SELECT * FROM ${database}.${table}\nLIMIT ${limit}`;
+    }
+}
 
 /**
  * Extension activation
@@ -597,8 +611,12 @@ async function createNewQuery(connectionManager: ConnectionManager, item: any): 
     if (item instanceof TableTreeItem) {
         const connection = connectionManager.getConnection(item.connectionId);
         const dbName = item.databaseName;
-        const tableName = item.tableName;
-        content = `-- Connection: ${connection?.name || 'Unknown'}\n-- Database: ${dbName}\n\nSELECT * FROM ${dbName}.${tableName}\nLIMIT 100;`;
+        let tableName = item.tableName;
+        if (connection?.type === DatabaseType.MSSQL) {
+            tableName = `[${tableName}]`;
+        }
+        const query = connection?.type ? formatSelectQuery(connection.type, dbName, tableName, 100) : `SELECT * FROM ${dbName}.${tableName}\nLIMIT 100`;
+        content = `-- Connection: ${connection?.name || 'Unknown'}\n-- Database: ${dbName}\n\n${query};`;
     } else if (item instanceof CollectionTreeItem) {
         const connection = connectionManager.getConnection(item.connectionId);
         const dbName = item.databaseName;
@@ -611,7 +629,9 @@ async function createNewQuery(connectionManager: ConnectionManager, item: any): 
             language = 'javascript';
             content = `// Connection: ${connection?.name || 'Unknown'}\n// Database: ${item.databaseName}\n\ndb.getCollectionNames();`;
         } else {
-            content = `-- Connection: ${connection?.name || 'Unknown'}\n-- Database: ${item.databaseName}\n\nSELECT * FROM ${item.databaseName}.\nLIMIT 100;`;
+            const schema = 'dbo';
+            const tablePrefix = connection?.type === DatabaseType.MSSQL ? `${item.databaseName}.${schema}.` : `${item.databaseName}.`;
+            content = `-- Connection: ${connection?.name || 'Unknown'}\n-- Database: ${item.databaseName}\n\nSELECT ${connection?.type === DatabaseType.MSSQL ? 'TOP 100 ' : ''}* FROM ${tablePrefix}\n${connection?.type === DatabaseType.MSSQL ? '' : 'LIMIT 100;'}`;
         }
     } else if (item instanceof ConnectionTreeItem) {
         const connection = item.connection;
@@ -643,7 +663,8 @@ async function selectTop(connectionManager: ConnectionManager, queryExecutor: Qu
             connectionId = item.connectionId;
             database = item.databaseName;
             const tableName = item.tableName;
-            query = `SELECT * FROM ${database}.${tableName} LIMIT 100`;
+            const connection = connectionManager.getConnection(connectionId);
+            query = connection?.type ? formatSelectQuery(connection.type, database, tableName, 100) : `SELECT * FROM ${database}.${tableName} LIMIT 100`;
         } else if (item instanceof CollectionTreeItem) {
             connectionId = item.connectionId;
             database = item.databaseName;
@@ -1016,7 +1037,7 @@ const QUERY_TEMPLATES: Record<TemplateType, QueryTemplate> = {
     select: {
         label: '$(search) SELECT',
         description: 'Select all columns from a table',
-        template: 'SELECT *\nFROM {database}.{table}\nWHERE 1=1\nLIMIT 100;',
+        template: 'SELECT {limit}*\nFROM {database}.{table}\nWHERE 1=1{bottomLimit};',
         mongoTemplate: 'db.{collection}.find({}).limit(100);',
         requiresTable: true
     },
@@ -1059,14 +1080,14 @@ const QUERY_TEMPLATES: Record<TemplateType, QueryTemplate> = {
     join: {
         label: '$(git-merge) JOIN',
         description: 'Join two tables',
-        template: 'SELECT t1.*, t2.*\nFROM {database}.{table} t1\nINNER JOIN {database}.{table2} t2\n  ON t1.{column} = t2.{column}\nLIMIT 100;',
+        template: 'SELECT {limit}t1.*, t2.*\nFROM {database}.{table} t1\nINNER JOIN {database}.{table2} t2\n  ON t1.{column} = t2.{column}{bottomLimit};',
         requiresTable: true,
         sqlOnly: true
     },
     create: {
         label: '$(new-file) CREATE TABLE',
         description: 'Create a new table',
-        template: 'CREATE TABLE {database}.{tableName} (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);',
+        template: 'CREATE TABLE {database}.{tableName} (\n  id INT PRIMARY KEY {autoIncrement},\n  name VARCHAR(255) NOT NULL,\n  created_at {timestamp} DEFAULT {currentTimestamp}\n);',
         sqlOnly: true
     },
     alter: {
@@ -1166,7 +1187,7 @@ async function showQueryTemplates(connectionManager: ConnectionManager): Promise
                     table = selectedColl.label;
                 }
             } else {
-                const tables = await provider.getTables(database);
+                const tables = provider instanceof MSSQLProvider ? await provider.getTables() : await provider.getTables(database);
                 const selectedTable = await vscode.window.showQuickPick(
                     tables.map(t => ({ label: t.name })),
                     { placeHolder: 'Select a table' }
@@ -1176,7 +1197,7 @@ async function showQueryTemplates(connectionManager: ConnectionManager): Promise
 
                 // Get columns for INSERT/UPDATE templates
                 if (['insert', 'update', 'distinct'].includes(selectedTemplate.key)) {
-                    columns = (await provider.getColumns(database, table)).map(c => c.name);
+                    columns = (provider instanceof MSSQLProvider ? await provider.getColumns(table) : await provider.getColumns(database, table)).map(c => c.name);
                 }
             }
         }
@@ -1187,7 +1208,8 @@ async function showQueryTemplates(connectionManager: ConnectionManager): Promise
             database,
             table,
             columns,
-            isMongo
+            isMongo,
+            selectedConn.connection.type
         );
 
         // Open new document with the query
@@ -1250,13 +1272,13 @@ async function generateQueryTemplate(
         if (['insert', 'update', 'distinct'].includes(templateType) && !isMongo) {
             const provider = connectionManager.getProvider(connectionId);
             if (provider) {
-                columns = (await provider.getColumns(database, tableName)).map(c => c.name);
+                columns = (provider instanceof MSSQLProvider ? await provider.getColumns(tableName) : await provider.getColumns(database, tableName)).map(c => c.name);
             }
         }
 
         // Generate query
         const templateStr = isMongo ? (template.mongoTemplate || template.template) : template.template;
-        const query = generateQueryFromTemplate(templateStr, database, tableName, columns, isMongo);
+        const query = generateQueryFromTemplate(templateStr, database, tableName, columns, isMongo, connection.type);
 
         // Open new document with the query
         const doc = await vscode.workspace.openTextDocument({
@@ -1279,23 +1301,48 @@ function generateQueryFromTemplate(
     database: string,
     table: string,
     columns: string[],
-    _isMongo: boolean
+    _isMongo: boolean,
+    dbType?: DatabaseType
 ): string {
+    // Determine limit syntax based on database type
+    const limitPrefix = dbType === DatabaseType.MSSQL ? 'TOP 100 ' : '';
+    const limitSuffix = (dbType === DatabaseType.MSSQL || _isMongo) ? '' : '\nLIMIT 100';
+    
+    // For MSSQL, use database.schema.table format and escape with brackets
+    const schema = 'dbo';
+    
+    // Escape table name for MSSQL (use brackets) or other DBs (no escaping by default)
+    const escapedTable = dbType === DatabaseType.MSSQL ? `[${table}]` : table;
+    const tableReference = dbType === DatabaseType.MSSQL 
+        ? `${database}.${schema}.${escapedTable}` 
+        : `${database}.${table}`;
+    
     let query = template
+        .replace(/{database}\.{table}/g, tableReference)
         .replace(/{database}/g, database)
-        .replace(/{table}/g, table)
+        .replace(/{table}/g, escapedTable)
         .replace(/{collection}/g, table)
         .replace(/{tableName}/g, 'new_table')
         .replace(/{table2}/g, 'other_table')
         .replace(/{condition}/g, 'id = 1')
         .replace(/{columnName}/g, 'new_column')
-        .replace(/{dataType}/g, 'VARCHAR(255)');
+        .replace(/{dataType}/g, 'VARCHAR(255)')
+        .replace(/{autoIncrement}/g, dbType === DatabaseType.MSSQL ? 'IDENTITY(1,1)' : 'AUTO_INCREMENT')
+        .replace(/{timestamp}/g, dbType === DatabaseType.MSSQL ? 'DATETIME' : 'TIMESTAMP')
+        .replace(/{currentTimestamp}/g, dbType === DatabaseType.MSSQL ? 'GETDATE()' : 'CURRENT_TIMESTAMP')
+        .replace(/{limit}/g, limitPrefix)
+        .replace(/{bottomLimit}/g, limitSuffix);
 
     if (columns.length > 0) {
+        // Escape column names for MSSQL
+        const escapedColumns = dbType === DatabaseType.MSSQL 
+            ? columns.map(c => `[${c}]`)
+            : columns;
+        
         query = query
-            .replace(/{columns}/g, columns.join(', '))
+            .replace(/{columns}/g, escapedColumns.join(', '))
             .replace(/{values}/g, columns.map(() => '?').join(', '))
-            .replace(/{column}/g, columns[0] || 'column_name')
+            .replace(/{column}/g, escapedColumns[0] || 'column_name')
             .replace(/{value}/g, "'new_value'")
             .replace(/{field}/g, columns[0] || 'field_name')
             .replace(/{fields}/g, columns.slice(0, 3).map(c => `${c}: "value"`).join(',\n  '));
