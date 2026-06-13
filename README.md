@@ -2,7 +2,7 @@
 
 A powerful VS Code extension for managing and querying multiple database connections. Supports MySQL, PostgreSQL, SQL Server (MSSQL), MongoDB, and MariaDB.
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)
 ![VS Code](https://img.shields.io/badge/VS%20Code-1.85%2B-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -18,7 +18,21 @@ A powerful VS Code extension for managing and querying multiple database connect
 - **Export Results**: Export query results to CSV or JSON
 - **Multiple Connections**: Work with multiple database connections simultaneously
 
-### New in v1.2.0 🎉
+### New in v1.4.0 🎉
+
+#### Results Panel — UX & Security Improvements
+- **Column Sorting**: Click any column header to sort ascending/descending (▲/▼ indicator)
+- **Pagination**: Large result sets are paginated in pages of 200 rows — no more freezing with big queries
+- **Date Formatting**: Date/DateTime values now display as `YYYY-MM-DD HH:MM:SS` instead of the raw JS Date string
+- **Row count pluralization**: Shows `1 row` instead of `1 rows`
+- **Security fix**: Query data is now passed to the webview via `JSON.stringify` — eliminates potential script injection through query text
+
+### Previous Features (v1.3.0)
+
+#### MSSQL Fix
+- Primary key detection now ignores casing and brackets, enabling editing on all PK tables
+
+### Previous Features (v1.2.0)
 
 #### Data Editing in Results
 - **Edit Mode**: Click "✏️ Edit Data" on any SELECT query result

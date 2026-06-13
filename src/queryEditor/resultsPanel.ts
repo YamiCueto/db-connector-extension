@@ -45,7 +45,10 @@ export class ResultsPanel {
         ResultsPanel.connectionManager = manager;
     }
 
-    private constructor(panel: vscode.WebviewPanel, private context: vscode.ExtensionContext) {
+    private constructor(
+        panel: vscode.WebviewPanel,
+        private context: vscode.ExtensionContext
+    ) {
         this.panel = panel;
 
         // Handle messages from the webview
@@ -91,16 +94,8 @@ export class ResultsPanel {
     /**
      * Show single result in the panel
      */
-    public static show(
-        context: vscode.ExtensionContext, 
-        result: QueryResult, 
-        query: string,
-        connectionId?: string,
-        database?: string
-    ): void {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
+    public static show(context: vscode.ExtensionContext, result: QueryResult, query: string, connectionId?: string, database?: string): void {
+        const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
         // If panel already exists, reveal it
         if (ResultsPanel.currentPanel) {
@@ -110,15 +105,10 @@ export class ResultsPanel {
         }
 
         // Create new panel
-        const panel = vscode.window.createWebviewPanel(
-            'dbConnectorResults',
-            'Query Results',
-            column || vscode.ViewColumn.Two,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true
-            }
-        );
+        const panel = vscode.window.createWebviewPanel('dbConnectorResults', 'Query Results', column || vscode.ViewColumn.Two, {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        });
 
         ResultsPanel.currentPanel = new ResultsPanel(panel, context);
         ResultsPanel.currentPanel.updateResults(result, query, connectionId, database);
@@ -128,9 +118,7 @@ export class ResultsPanel {
      * Show multiple results in the panel with tabs
      */
     public static showMultiple(context: vscode.ExtensionContext, results: MultiQueryResult[]): void {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
+        const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
         // If panel already exists, reveal it
         if (ResultsPanel.currentPanel) {
@@ -140,15 +128,10 @@ export class ResultsPanel {
         }
 
         // Create new panel
-        const panel = vscode.window.createWebviewPanel(
-            'dbConnectorResults',
-            'Query Results',
-            column || vscode.ViewColumn.Two,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true
-            }
-        );
+        const panel = vscode.window.createWebviewPanel('dbConnectorResults', 'Query Results', column || vscode.ViewColumn.Two, {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        });
 
         ResultsPanel.currentPanel = new ResultsPanel(panel, context);
         ResultsPanel.currentPanel.updateMultipleResults(results);
@@ -242,7 +225,7 @@ export class ResultsPanel {
         if (!this.editState.dataEditor) return;
 
         this.editState.dataEditor.addCellChange(change);
-        
+
         // Update currentRows
         if (this.editState.currentRows[change.rowIndex]) {
             this.editState.currentRows[change.rowIndex][change.column] = change.newValue;
@@ -284,7 +267,7 @@ export class ResultsPanel {
         };
 
         this.editState.dataEditor.markRowForDeletion(deletedRow);
-        
+
         // Mark row as deleted in UI
         this.editState.currentRows[rowIndex]._isDeleted = true;
 
@@ -307,17 +290,13 @@ export class ResultsPanel {
                 cancellable: false
             },
             async () => {
-                return await this.editState.dataEditor!.executeChanges(
-                    this.editState.tableInfo!,
-                    this.editState.originalRows,
-                    this.editState.database
-                );
+                return await this.editState.dataEditor!.executeChanges(this.editState.tableInfo!, this.editState.originalRows, this.editState.database);
             }
         );
 
         if (result.success) {
             vscode.window.showInformationMessage(result.message);
-            
+
             // Refresh the data
             await this.refreshData();
         } else {
@@ -371,7 +350,7 @@ export class ResultsPanel {
     private updateEditStatus(): void {
         const hasChanges = this.editState.dataEditor?.hasChanges() || false;
         const changes = this.editState.dataEditor?.getPendingChanges();
-        
+
         this.panel.webview.postMessage({
             command: 'updateEditStatus',
             hasChanges,
@@ -389,17 +368,21 @@ export class ResultsPanel {
     private getMultipleResultsHtml(results: MultiQueryResult[]): string {
         const showRowCount = vscode.workspace.getConfiguration('dbConnector').get('showRowCount', true);
 
-        const tabs = results.map((r, i) => {
-            const statusIcon = r.result.error ? '❌' : '✓';
-            const preview = r.query.substring(0, 30).replace(/\n/g, ' ');
-            return `<button class="tab ${i === 0 ? 'active' : ''}" onclick="showTab(${i})">${statusIcon} Query ${i + 1}: ${this.escapeHtml(preview)}...</button>`;
-        }).join('');
+        const tabs = results
+            .map((r, i) => {
+                const statusIcon = r.result.error ? '❌' : '✓';
+                const preview = r.query.substring(0, 30).replace(/\n/g, ' ');
+                return `<button class="tab ${i === 0 ? 'active' : ''}" onclick="showTab(${i})">${statusIcon} Query ${i + 1}: ${this.escapeHtml(preview)}...</button>`;
+            })
+            .join('');
 
-        const tabContents = results.map((r, i) => {
-            return `<div class="tab-content ${i === 0 ? 'active' : ''}" id="tab-${i}">
+        const tabContents = results
+            .map((r, i) => {
+                return `<div class="tab-content ${i === 0 ? 'active' : ''}" id="tab-${i}">
                 ${this.getResultContent(r.result, r.query, showRowCount, i)}
             </div>`;
-        }).join('');
+            })
+            .join('');
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -609,22 +592,28 @@ export class ResultsPanel {
                 <button class="action" onclick="exportResults('csv', ${index})">Export CSV</button>
                 <button class="action" onclick="exportResults('json', ${index})">Export JSON</button>
                 <button class="action" onclick="copyTable(${index})">Copy</button>
-                <span class="info">${showRowCount ? `${result.rowCount} rows` : ''} | ${result.executionTime}ms</span>
+                <span class="info">${showRowCount ? `${result.rowCount} row${result.rowCount !== 1 ? 's' : ''}` : ''} | ${result.executionTime}ms</span>
             </div>
             <table>
                 <thead>
                     <tr>${columns.map(col => `<th>${this.escapeHtml(col)}</th>`).join('')}</tr>
                 </thead>
                 <tbody>
-                    ${result.rows.map(row => `
-                        <tr>${columns.map(col => {
-                            const value = row[col];
-                            if (value === null || value === undefined) {
-                                return '<td class="null-value">NULL</td>';
-                            }
-                            return `<td>${this.escapeHtml(String(value))}</td>`;
-                        }).join('')}</tr>
-                    `).join('')}
+                    ${result.rows
+                        .map(
+                            row => `
+                        <tr>${columns
+                            .map(col => {
+                                const value = row[col];
+                                if (value === null || value === undefined) {
+                                    return '<td class="null-value">NULL</td>';
+                                }
+                                return `<td>${this.escapeHtml(this.formatCellValue(value))}</td>`;
+                            })
+                            .join('')}</tr>
+                    `
+                        )
+                        .join('')}
                 </tbody>
             </table>
             <details style="margin-top: 15px;">
@@ -736,11 +725,30 @@ export class ResultsPanel {
     }
 
     /**
-     * Generate table HTML
+     * Generate table HTML with client-side sorting and pagination
      */
     private getTableHtml(result: QueryResult, _query: string, showRowCount: boolean): string {
         const columns = result.fields?.map(f => f.name) || Object.keys(result.rows![0] || {});
         const canEdit = this.canEnableEditMode(_query);
+        const rowCount = result.rowCount;
+        const rowLabel = rowCount === 1 ? 'row' : 'rows';
+
+        // Pre-format Date objects so JSON.stringify serialises them as readable strings
+        const safeRows = (result.rows || []).map(row => {
+            const safe: Record<string, any> = {};
+            for (const col of columns) {
+                const v = row[col];
+                safe[col] = (v instanceof Date) ? this.formatCellValue(v) : v;
+            }
+            return safe;
+        });
+
+        // JSON.stringify handles all escaping — no injection risk
+        const dataJson        = JSON.stringify(safeRows);
+        const columnsJson     = JSON.stringify(columns);
+        const connectionIdJson = JSON.stringify(this.editState.connectionId);
+        const databaseJson    = JSON.stringify(this.editState.database || '');
+        const queryJson       = JSON.stringify(_query);
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -770,20 +778,13 @@ export class ResultsPanel {
             cursor: pointer;
             border-radius: 2px;
         }
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
+        button:hover { background-color: var(--vscode-button-hoverBackground); }
         button.edit-btn {
             background-color: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
         }
-        button.edit-btn:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        button.edit-btn:hover { background-color: var(--vscode-button-secondaryHoverBackground); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .info {
             margin-left: auto;
             color: var(--vscode-descriptionForeground);
@@ -804,17 +805,27 @@ export class ResultsPanel {
             font-weight: bold;
             position: sticky;
             top: 0;
+            cursor: pointer;
+            user-select: none;
         }
-        tr:nth-child(even) {
-            background-color: var(--vscode-list-hoverBackground);
-        }
-        tr:hover {
-            background-color: var(--vscode-list-activeSelectionBackground);
-        }
+        th:hover { background-color: var(--vscode-list-hoverBackground); }
+        th.sorted-asc::after  { content: ' \u25b2'; font-size: 0.75em; }
+        th.sorted-desc::after { content: ' \u25bc'; font-size: 0.75em; }
+        tr:nth-child(even) { background-color: var(--vscode-list-hoverBackground); }
+        tr:hover { background-color: var(--vscode-list-activeSelectionBackground); }
         .null-value {
             color: var(--vscode-descriptionForeground);
             font-style: italic;
         }
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 0.9em;
+            color: var(--vscode-descriptionForeground);
+        }
+        .pagination button { padding: 3px 10px; font-size: 0.85em; }
     </style>
 </head>
 <body>
@@ -825,55 +836,119 @@ export class ResultsPanel {
         <button onclick="copyTable()">Copy</button>
         ${canEdit ? `<button class="edit-btn" onclick="enableEditMode()">✏️ Edit Data</button>` : ''}
         <span class="info">
-            ${showRowCount ? `${result.rowCount} rows` : ''} | ${result.executionTime}ms
+            ${showRowCount ? `${rowCount} ${rowLabel}` : ''} | ${result.executionTime}ms
         </span>
     </div>
-    <table>
-        <thead>
-            <tr>
-                ${columns.map(col => `<th>${this.escapeHtml(col)}</th>`).join('')}
-            </tr>
-        </thead>
-        <tbody>
-            ${result.rows!.map(row => `
-                <tr>
-                    ${columns.map(col => {
-                        const value = row[col];
-                        if (value === null || value === undefined) {
-                            return '<td class="null-value">NULL</td>';
-                        }
-                        return `<td>${this.escapeHtml(String(value))}</td>`;
-                    }).join('')}
-                </tr>
-            `).join('')}
-        </tbody>
+    <table id="dataTable">
+        <thead><tr id="headerRow"></tr></thead>
+        <tbody id="tableBody"></tbody>
     </table>
+    <div class="pagination" id="pagination"></div>
 
     <script>
-        const vscode = acquireVsCodeApi();
+        const vscode      = acquireVsCodeApi();
+        const ALL_DATA    = ${dataJson};
+        const COLUMNS     = ${columnsJson};
+        const CONNECTION_ID = ${connectionIdJson};
+        const DATABASE    = ${databaseJson};
+        const QUERY       = ${queryJson};
+        const PAGE_SIZE   = 200;
+
+        let sortColIdx  = -1;
+        let sortAsc     = true;
+        let currentPage = 0;
+        let displayData = ALL_DATA.slice();
+
+        function esc(text) {
+            if (text === null || text === undefined) { return ''; }
+            var d = document.createElement('div');
+            d.textContent = String(text);
+            return d.innerHTML;
+        }
+
+        function fmtCell(value) {
+            if (value === null || value === undefined) {
+                return '<span class="null-value">NULL</span>';
+            }
+            return esc(String(value));
+        }
+
+        function renderHeaders() {
+            document.getElementById('headerRow').innerHTML = COLUMNS.map(function(col, i) {
+                var cls = (sortColIdx === i) ? (sortAsc ? 'sorted-asc' : 'sorted-desc') : '';
+                return '<th class="' + cls + '" onclick="sortBy(' + i + ')">' + esc(col) + '</th>';
+            }).join('');
+        }
+
+        function renderTable() {
+            var start = currentPage * PAGE_SIZE;
+            var pageRows = displayData.slice(start, start + PAGE_SIZE);
+            document.getElementById('tableBody').innerHTML = pageRows.map(function(row) {
+                return '<tr>' + COLUMNS.map(function(col) {
+                    return '<td>' + fmtCell(row[col]) + '</td>';
+                }).join('') + '</tr>';
+            }).join('');
+            renderPagination();
+        }
+
+        function renderPagination() {
+            var total      = displayData.length;
+            var totalPages = Math.ceil(total / PAGE_SIZE);
+            var pag        = document.getElementById('pagination');
+            if (totalPages <= 1) { pag.innerHTML = ''; return; }
+            var s = currentPage * PAGE_SIZE + 1;
+            var e = Math.min((currentPage + 1) * PAGE_SIZE, total);
+            pag.innerHTML =
+                '<button onclick="goPage(0)"' + (currentPage === 0 ? ' disabled' : '') + '>\u00AB</button>' +
+                '<button onclick="goPage(' + (currentPage - 1) + ')"' + (currentPage === 0 ? ' disabled' : '') + '>\u2039 Prev</button>' +
+                '<span>Page ' + (currentPage + 1) + ' of ' + totalPages + ' (' + s + '\u2013' + e + ' of ' + total + ' rows)</span>' +
+                '<button onclick="goPage(' + (currentPage + 1) + ')"' + (currentPage >= totalPages - 1 ? ' disabled' : '') + '>Next \u203a</button>' +
+                '<button onclick="goPage(' + (totalPages - 1) + ')"' + (currentPage >= totalPages - 1 ? ' disabled' : '') + '>\u00BB</button>';
+        }
+
+        function goPage(p) { currentPage = p; renderTable(); }
+
+        function sortBy(colIdx) {
+            var col = COLUMNS[colIdx];
+            if (sortColIdx === colIdx) { sortAsc = !sortAsc; }
+            else { sortColIdx = colIdx; sortAsc = true; }
+            displayData = ALL_DATA.slice().sort(function(a, b) {
+                var va = a[col], vb = b[col];
+                if (va === null || va === undefined) { return 1; }
+                if (vb === null || vb === undefined) { return -1; }
+                return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * (sortAsc ? 1 : -1);
+            });
+            currentPage = 0;
+            renderHeaders();
+            renderTable();
+        }
 
         function exportResults(format) {
             vscode.postMessage({ command: 'export', format: format });
         }
 
         function copyTable() {
-            const table = document.querySelector('table');
-            const text = Array.from(table.querySelectorAll('tr'))
-                .map(row => Array.from(row.querySelectorAll('th, td'))
-                    .map(cell => cell.textContent)
-                    .join('\\t'))
-                .join('\\n');
-            vscode.postMessage({ command: 'copy', data: text });
+            var header = COLUMNS.join('\\t');
+            var rows = ALL_DATA.map(function(row) {
+                return COLUMNS.map(function(col) {
+                    var v = row[col];
+                    return (v === null || v === undefined) ? '' : String(v);
+                }).join('\\t');
+            }).join('\\n');
+            vscode.postMessage({ command: 'copy', data: header + '\\n' + rows });
         }
 
         function enableEditMode() {
-            vscode.postMessage({ 
+            vscode.postMessage({
                 command: 'enableEditMode',
-                connectionId: '${this.editState.connectionId}',
-                database: '${this.editState.database || ''}',
-                query: \`${_query.replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`
+                connectionId: CONNECTION_ID,
+                database:     DATABASE,
+                query:        QUERY
             });
         }
+
+        renderHeaders();
+        renderTable();
     </script>
 </body>
 </html>`;
@@ -1082,40 +1157,47 @@ export class ResultsPanel {
         <thead>
             <tr>
                 <th class="row-actions">Actions</th>
-                ${columns.map(col => {
-                    const isPk = primaryKeys.includes(col);
-                    return `<th class="${isPk ? 'pk' : ''}" title="${isPk ? 'Primary Key' : ''}">${isPk ? '🔑 ' : ''}${this.escapeHtml(col)}</th>`;
-                }).join('')}
+                ${columns
+                    .map(col => {
+                        const isPk = primaryKeys.includes(col);
+                        return `<th class="${isPk ? 'pk' : ''}" title="${isPk ? 'Primary Key' : ''}">${isPk ? '🔑 ' : ''}${this.escapeHtml(col)}</th>`;
+                    })
+                    .join('')}
             </tr>
         </thead>
         <tbody>
-            ${this.editState.currentRows.map((row, rowIndex) => {
-                const isDeleted = row._isDeleted;
-                const isNew = row._isNew;
-                return `
+            ${this.editState.currentRows
+                .map((row, rowIndex) => {
+                    const isDeleted = row._isDeleted;
+                    const isNew = row._isNew;
+                    return `
                 <tr data-row-index="${rowIndex}" class="${isDeleted ? 'deleted' : ''} ${isNew ? 'new-row' : ''}">
                     <td class="row-actions">
-                        ${!isDeleted ? `<button class="delete-btn" onclick="deleteRow(${rowIndex})" title="Delete row">🗑️</button>` : 
-                          `<button onclick="undeleteRow(${rowIndex})" title="Undo delete">↩️</button>`}
+                        ${
+                            !isDeleted
+                                ? `<button class="delete-btn" onclick="deleteRow(${rowIndex})" title="Delete row">🗑️</button>`
+                                : `<button onclick="undeleteRow(${rowIndex})" title="Undo delete">↩️</button>`
+                        }
                     </td>
-                    ${columns.map(col => {
-                        const value = row[col];
-                        const isPk = primaryKeys.includes(col);
-                        const isEditable = !isPk && !isDeleted;
-                        const displayValue = value === null || value === undefined 
-                            ? '<span class="null-value">NULL</span>' 
-                            : this.escapeHtml(String(value));
-                        
-                        return `<td 
+                    ${columns
+                        .map(col => {
+                            const value = row[col];
+                            const isPk = primaryKeys.includes(col);
+                            const isEditable = !isPk && !isDeleted;
+                            const displayValue = value === null || value === undefined ? '<span class="null-value">NULL</span>' : this.escapeHtml(this.formatCellValue(value));
+
+                            return `<td 
                             class="${isPk ? 'pk-cell' : ''} ${isEditable ? 'editable' : ''}"
                             data-row="${rowIndex}" 
                             data-col="${col}"
-                            data-value="${this.escapeHtml(String(value ?? ''))}"
+                            data-value="${this.escapeHtml(this.formatCellValue(value ?? ''))}"
                             ${isEditable ? `ondblclick="startEdit(this)"` : ''}
                         >${displayValue}</td>`;
-                    }).join('')}
+                        })
+                        .join('')}
                 </tr>`;
-            }).join('')}
+                })
+                .join('')}
         </tbody>
     </table>
 
@@ -1270,7 +1352,7 @@ export class ResultsPanel {
     private async exportResults(format: string, index?: number): Promise<void> {
         // Get the result to export
         let resultToExport: QueryResult | undefined;
-        
+
         if (this.currentResults && index !== undefined) {
             // Multiple results - export specific one
             resultToExport = this.currentResults[index]?.result;
@@ -1326,10 +1408,12 @@ export class ResultsPanel {
         const header = columns.map(col => this.escapeCsvValue(col)).join(',');
 
         const dataRows = rows.map(row =>
-            columns.map(col => {
-                const value = row[col];
-                return this.escapeCsvValue(value === null || value === undefined ? '' : String(value));
-            }).join(',')
+            columns
+                .map(col => {
+                    const value = row[col];
+                    return this.escapeCsvValue(value === null || value === undefined ? '' : String(value));
+                })
+                .join(',')
         );
 
         return [header, ...dataRows].join('\n');
@@ -1351,6 +1435,18 @@ export class ResultsPanel {
     private async copyToClipboard(data: string): Promise<void> {
         await vscode.env.clipboard.writeText(data);
         vscode.window.showInformationMessage('Results copied to clipboard');
+    }
+
+    /**
+     * Format a cell value for display — converts Date objects to readable strings.
+     */
+    private formatCellValue(value: any): string {
+        if (value === null || value === undefined) { return ''; }
+        if (value instanceof Date) {
+            // YYYY-MM-DD HH:MM:SS (UTC)
+            return value.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+        }
+        return String(value);
     }
 
     /**

@@ -1,3 +1,19 @@
+# [1.4.0] - 2026-06-13
+
+### Improved
+
+#### Results Panel — UX & Security
+- **Column Sorting**: Click any column header to sort ascending/descending (▲/▼ indicator). Uses locale-aware numeric sorting.
+- **Pagination**: Results are now paginated in pages of 200 rows with First/Prev/Next/Last controls. Eliminates browser freezing on large datasets.
+- **Date Formatting**: Date/DateTime values now display as `YYYY-MM-DD HH:MM:SS` instead of the raw JavaScript Date string (e.g. `Tue Apr 28 2026 16:30:46 GMT-0500 ...`).
+- **Row count pluralization**: Status bar now correctly shows `1 row` instead of `1 rows`.
+
+### Fixed
+
+- **Security**: Query text and connection metadata are now passed to the webview via `JSON.stringify` instead of raw string interpolation inside `<script>` tags, eliminating potential XSS/script injection.
+
+---
+
 # [1.3.0] - 2026-01-18
 
 ### Fixed
